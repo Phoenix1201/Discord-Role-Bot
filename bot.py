@@ -474,4 +474,8 @@ async def on_ready():
     init_db()
     await tree.sync()
     print("起動完了")
+
+    await client.change_presence(
+        activity=discord.Game(name="( ˘ω˘)ｽﾔｧ")
+    )
 client.run(TOKEN)
