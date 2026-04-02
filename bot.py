@@ -10,10 +10,12 @@ import asyncio
 from PIL import ImageFont
 
 FONT_PATH = os.path.join(os.path.dirname(__file__), "NotoSansJP-VariableFont_wght.ttf")
-
+if not os.path.exists(FONT_PATH):
+    print("フォントファイルが存在しません")
+print("FONT_PATH:", FONT_PATH)
 try:
-    FONT = ImageFont.truetype(FONT_PATH, 24)
-    SMALL_FONT = ImageFont.truetype(FONT_PATH, 12)
+    FONT = ImageFont.truetype(FONT_PATH, 15)
+    SMALL_FONT = ImageFont.truetype(FONT_PATH, 10)
     print("フォント読み込み成功")
 except Exception as e:
     print("フォント読み込み失敗:", e)
@@ -26,8 +28,13 @@ MAX_WEIGHT = 3
 # =========================
 # DB初期化
 # =========================
+def get_conn():
+    conn = sqlite3.connect(DB_PATH, timeout=10, isolation_level=None)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    return conn
+
 def init_db():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = get_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -67,7 +74,7 @@ def init_db():
 # DB操作
 # =========================
 def get_entries(guild_id):
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = get_conn()
     cur = conn.cursor()
 
     cur.execute("SELECT * FROM entries WHERE guild_id=?", (guild_id,))
@@ -86,7 +93,7 @@ def get_entries(guild_id):
     return data
 
 def save_entry(guild_id, user_id, entry):
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = get_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -105,7 +112,7 @@ def save_entry(guild_id, user_id, entry):
     conn.close()
 
 def delete_entry(guild_id, user_id):
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = get_conn()
     cur = conn.cursor()
 
     cur.execute("DELETE FROM entries WHERE guild_id=? AND user_id=?", (guild_id, user_id))
@@ -113,7 +120,7 @@ def delete_entry(guild_id, user_id):
     conn.close()
 
 def add_history(guild_id, winner_id, role_name):
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = get_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -125,7 +132,7 @@ def add_history(guild_id, winner_id, role_name):
     conn.close()
 
 def get_history(guild_id):
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = get_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -158,6 +165,7 @@ class ConfirmView(discord.ui.View):
         if self.message:
             await self.message.edit(
                 content="⏰ 時間切れでキャンセルされました",
+                embeds=[],
                 view=self
             )
 
@@ -166,8 +174,11 @@ class ConfirmView(discord.ui.View):
         await interaction.response.defer()
         save_entry(self.guild_id, self.uid, self.entry)
         try:
-            member = await interaction.guild.fetch_member(int(self.entry["target"]))
-        except:
+            member = interaction.guild.get_member(int(self.entry["target"]))
+            if not member:
+                member = await interaction.guild.fetch_member(int(self.entry["target"]))
+        except Exception as e:
+            print("member fetch error:", e)
             member = None
         embed = create_role_embed(
             "✅上書きしました",
@@ -181,7 +192,8 @@ class ConfirmView(discord.ui.View):
     @discord.ui.button(label="キャンセル", style=discord.ButtonStyle.red)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.stop()
-        await interaction.response.edit_message(
+        await interaction.response.defer()
+        await interaction.edit_original_response(
             content="キャンセルしました",
             embed=None,
             view=None
@@ -191,7 +203,7 @@ class ConfirmView(discord.ui.View):
 # 管理者
 # =========================
 def add_operator(guild_id, user_id):
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = get_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -203,7 +215,7 @@ def add_operator(guild_id, user_id):
 
 
 def remove_operator(guild_id, user_id):
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = get_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -215,7 +227,7 @@ def remove_operator(guild_id, user_id):
 
 
 def is_operator(guild_id, user_id):
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = get_conn()
     cur = conn.cursor()
 
     cur.execute("""
@@ -237,34 +249,46 @@ def pick_winner(entries):
         return None
     return random.choices(users, weights=weights, k=1)[0]
 
+def normalize_color(code: str) -> int:
+    try:
+        if not code:
+            return 0x5865F2  # デフォルト
+
+        code = code.replace("#", "")
+
+        if len(code) != 6:
+            return 0x5865F2
+
+        return int(code, 16)
+
+    except:
+        return 0x5865F2
+
 from PIL import Image, ImageDraw
 import math
 from io import BytesIO
 
-def create_pie_chart(entries, guild):
-    size = 500
+def create_pie_chart(entries):
+    size = 350
     img = Image.new("RGB", (size, size), "white")
     draw = ImageDraw.Draw(img)
 
     center = size // 2
-    radius = 170
+    radius = 120
 
     total = sum(e["weight"] for e in entries.values())
+    if total <= 0:
+        total = 1
 
     start_angle = -90  # 上スタート
 
-    for i, (uid, e) in enumerate(entries.items(), start=1):
+    sorted_entries = sorted(entries.items(), key=lambda x: x[1]["weight"], reverse=True)
+
+    for i, (uid, e) in enumerate(sorted_entries, start=1):
         weight = e["weight"]
         angle = 360 * (weight / total)
-
-        # 色
-        if e["color"]:
-            try:
-                color = f"#{e['color']}"
-            except:
-                color = "#5865F2"
-        else:
-            color = "#5865F2"
+        color_val = normalize_color(e.get("color"))
+        hex_color = f"#{color_val:06x}"
 
         # ===== 円 =====
         draw.pieslice(
@@ -276,7 +300,7 @@ def create_pie_chart(entries, guild):
             ],
             start=start_angle,
             end=start_angle + angle,
-            fill=color,
+            fill=hex_color,
             outline="white"
         )
 
@@ -331,10 +355,19 @@ class DiceView(discord.ui.View):
         super().__init__(timeout=60)
         self.entries = entries
         self.guild_id = guild_id
-        self.used = False  # ← 二重押し防止
+        self.used = False
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return True  # 誰でも押せる
+        return True
+
+    async def on_timeout(self):
+        dice_running[self.guild_id] = False
+
+        for item in self.children:
+            item.disabled = True
+
+        if hasattr(self, "message") and self.message:
+            await self.message.edit(view=self)
 
     @discord.ui.button(label="🎲 抽選する", style=discord.ButtonStyle.green)
     async def roll(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -344,77 +377,106 @@ class DiceView(discord.ui.View):
             return
 
         self.used = True
+        button.disabled = True
 
-        # 👇 抽選中演出
-        await interaction.response.edit_message(content="🎲 抽選中...", view=None)
-
-        await asyncio.sleep(2)
-
-        winner_id = pick_winner(self.entries)
-        entry = self.entries[winner_id]
-
-        winner_weight = entry["weight"]
-        total = sum(e["weight"] for e in self.entries.values())
-        chance = winner_weight / total * 100
+        await interaction.response.defer()
+        await interaction.edit_original_response(view=self)
 
         try:
-            member = await interaction.guild.fetch_member(int(entry["target"]))
-        except:
-            await interaction.followup.send("ユーザー不明")
-            return
+            msg = await interaction.followup.send(content="🎲 抽選中...")
 
-        # 👇 全ロール削除
-        for e in self.entries.values():
-            if e.get("role_id"):
-                r = interaction.guild.get_role(e["role_id"])
-                if r:
+            # 🎲 演出
+            for i in range(3):
+                await msg.edit(content="🎲 抽選中" + "." * i)
+                await asyncio.sleep(0.5)
+
+            winner_id = pick_winner(self.entries)
+            if not winner_id:
+                await interaction.followup.send("抽選できませんでした")
+                return
+
+            entry = self.entries[winner_id]
+
+            winner_weight = entry["weight"]
+            total = sum(e["weight"] for e in self.entries.values()) or 1
+            chance = winner_weight / total * 100
+
+            try:
+                member = interaction.guild.get_member(int(entry["target"])) \
+                    or await interaction.guild.fetch_member(int(entry["target"]))
+            except:
+                await interaction.followup.send("⚠️ ユーザー取得に失敗しました")
+                return
+
+            # ロール削除
+            for uid, e in self.entries.items():
+                role_id = e.get("role_id")
+                if not role_id:
+                    continue
+
+                r = interaction.guild.get_role(role_id)
+                if not r:
+                    e["role_id"] = None
+                    save_entry(self.guild_id, uid, e)
+                    continue
+
+                if r != interaction.guild.default_role and r < interaction.guild.me.top_role and not r.managed:
                     try:
                         await r.delete()
-                    except:
-                        pass
+                    except Exception as e:
+                        print("role delete error:", e)
 
-        # 👇 ロール作成
-        try:
-            color = discord.Color(int(entry["color"], 16)) if entry["color"] else discord.Color.default()
-        except:
-            color = discord.Color.default()
+            # ロール作成
+            color = discord.Color(normalize_color(entry["color"]))
+            role = await interaction.guild.create_role(
+                name=entry["role_name"],
+                color=color
+            )
 
-        role = await interaction.guild.create_role(name=entry["role_name"], color=color)
-        await role.edit(position=interaction.guild.me.top_role.position - 1)
-        await member.add_roles(role)
+            try:
+                await role.edit(position=interaction.guild.me.top_role.position - 1)
+            except:
+                pass
 
-        entry["role_id"] = role.id
+            await member.add_roles(role)
+            entry["role_id"] = role.id
 
-        # 👇 重み更新
-        for uid, e in self.entries.items():
-            if uid == winner_id:
-                e["weight"] = 1
-            else:
-                e["weight"] = min(e.get("weight", 1) + 0.25, MAX_WEIGHT)
+            # 重み更新
+            for uid, e in self.entries.items():
+                if uid == winner_id:
+                    e["weight"] = 1
+                else:
+                    e["weight"] = min(e.get("weight", 1) + 0.25, MAX_WEIGHT)
+                save_entry(self.guild_id, uid, e)
 
-            save_entry(self.guild_id, uid, e)
+            add_history(self.guild_id, winner_id, entry["role_name"])
 
-        add_history(self.guild_id, winner_id, entry["role_name"])
+            embed = create_role_embed(
+                "🎉当選！",
+                entry["role_name"],
+                entry["color"],
+                member
+            )
+            embed.description += f"\n当選確率: {chance:.1f}%"
 
-        embed = create_role_embed(
-            "🎉当選！",
-            entry["role_name"],
-            entry["color"],
-            member
-        )
-        
-        embed.description += f"\n当選確率: {chance:.1f}%"
+            await msg.edit(content="")
+            await interaction.followup.send(embed=embed)
+            dice_running[self.guild_id] = False
 
-        await interaction.followup.send(embed=embed)
-
+        except Exception as e:
+            print("dice error:", e)
+            await interaction.followup.send("エラーが発生しました")
+            dice_running[self.guild_id] = False
+                
 # =========================
 # Weight
 # =========================
 class WeightSelect(discord.ui.Select):
-    def __init__(self, entries, guild_id):
+    def __init__(self, entries, guild_id, guild):
         self.entries = entries
         self.guild_id = guild_id
         self.guild = guild
+        self.used = False
 
         options = []
 
@@ -479,6 +541,8 @@ class WeightModal(discord.ui.Modal, title="重み変更"):
 
         # 確率計算
         total = sum(e["weight"] for e in entries.values())
+        if total <= 0:
+            total = 1
         chance = value / total * 100
 
         member = interaction.guild.get_member(int(self.target_id))
@@ -499,14 +563,10 @@ class WeightView(discord.ui.View):
 def create_role_embed(title, role_name, color_code, target_member=None):
     # 色処理
     if color_code:
-        try:
-            color = discord.Color(int(color_code, 16))
-            color_text = f"#{color_code}"
-            image_url = f"https://dummyimage.com/100x100/{color_code}/{color_code}.png"
-        except:
-            color = discord.Color.blurple()
-            color_text = "不正"
-            image_url = None
+        hex_code = f"{normalize_color(color_code):06x}"
+        color = discord.Color(normalize_color(color_code))
+        image_url = f"https://dummyimage.com/100x100/{hex_code}/{hex_code}.png"
+        color_text = f"#{hex_code}"
     else:
         color = discord.Color.blurple()
         color_text = "未指定"
@@ -633,8 +693,8 @@ async def delete(interaction: discord.Interaction, user: discord.Member = None):
             if role:
                 try:
                     await role.delete()
-                except:
-                    pass
+                except Exception as e:
+                    print("role delete error:", e)
 
         delete_entry(guild_id, uid)
         await interaction.response.send_message("登録を解除しました", ephemeral=True)
@@ -676,18 +736,18 @@ async def dice(interaction: discord.Interaction):
         return
 
     dice_running[gid] = True
-
+    
     try:
         await interaction.response.defer()
 
         entries = get_entries(gid)
 
         if not entries:
+            dice_running[gid] = False
             await interaction.followup.send("登録なし")
             return
 
-        # 🎨 円グラフ
-        img = create_pie_chart(entries, interaction.guild)
+        img = create_pie_chart(entries)
         file = discord.File(img, filename="chart.png")
 
         embed = discord.Embed(
@@ -698,17 +758,23 @@ async def dice(interaction: discord.Interaction):
         embed.set_image(url="attachment://chart.png")
 
         desc = ""
-        for i, (uid, entry) in enumerate(entries.items(), start=1):
-            member = interaction.guild.get_member(int(uid))
+        sorted_entries = sorted(entries.items(), key=lambda x: x[1]["weight"], reverse=True)
+
+        for i, (uid, entry) in enumerate(sorted_entries, start=1):
+            member = interaction.guild.get_member(int(uid)) \
+                or await interaction.guild.fetch_member(int(uid))
             name = member.display_name if member else uid
             desc += f"{i}. {name} → {entry['role_name']}\n"
         
         embed.add_field(name="参加者一覧", value=desc or "なし", inline=False)
-        view = DiceView(entries, gid)
-        await interaction.followup.send(embed=embed, file=file, view=view)
 
-    finally:
-        dice_running[gid] = False
+        view = DiceView(entries, gid)
+        msg = await interaction.followup.send(embed=embed, file=file, view=view)
+        view.message = msg
+
+    except Exception as e:
+        print("dice error:", e)
+        await interaction.followup.send("エラーが発生しました")
 
 # =========================
 # /list
@@ -722,7 +788,8 @@ async def list_roles(interaction: discord.Interaction):
     embed = discord.Embed(title="📋一覧", color=discord.Color.blurple())
 
     for uid, entry in entries.items():
-        member = interaction.guild.get_member(int(uid))
+        member = interaction.guild.get_member(int(uid)) \
+            or await interaction.guild.fetch_member(int(uid))
         name = member.display_name if member else uid
 
         embed.add_field(
@@ -746,7 +813,8 @@ async def history(interaction: discord.Interaction):
 
     desc = ""
     for i, (uid, role) in enumerate(rows, 1):
-        member = interaction.guild.get_member(int(uid))
+        member = interaction.guild.get_member(int(uid)) \
+            or await interaction.guild.fetch_member(int(uid))
         name = member.display_name if member else uid
         desc += f"{i}. {name} → {role}\n"
 
