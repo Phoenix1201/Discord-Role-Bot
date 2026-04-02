@@ -12,8 +12,8 @@ from PIL import ImageFont
 FONT_PATH = os.path.join(os.path.dirname(__file__), "NotoSansJP-VariableFont_wght.ttf")
 
 try:
-    FONT = ImageFont.truetype(FONT_PATH, 60)
-    SMALL_FONT = ImageFont.truetype(FONT_PATH, 48)
+    FONT = ImageFont.truetype(FONT_PATH, 24)
+    SMALL_FONT = ImageFont.truetype(FONT_PATH, 12)
     print("フォント読み込み成功")
 except Exception as e:
     print("フォント読み込み失敗:", e)
