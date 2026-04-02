@@ -4,14 +4,16 @@ import os
 from dotenv import load_dotenv
 import random
 import sqlite3
+import shutil
 
-DB_PATH = "/data/data.db"  # ローカルなら "data.db"
+DB_PATH = "/data/data.db"
+MAX_WEIGHT = 5
 
 # =========================
 # DB初期化
 # =========================
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     cur = conn.cursor()
 
     cur.execute("""
@@ -43,7 +45,7 @@ def init_db():
 # DB操作
 # =========================
 def get_entries(guild_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     cur = conn.cursor()
 
     cur.execute("SELECT * FROM entries WHERE guild_id=?", (guild_id,))
@@ -62,7 +64,7 @@ def get_entries(guild_id):
     return data
 
 def save_entry(guild_id, user_id, entry):
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     cur = conn.cursor()
 
     cur.execute("""
@@ -74,14 +76,14 @@ def save_entry(guild_id, user_id, entry):
         entry["color"],
         entry["target"],
         entry["weight"],
-        entry["role_id"]
+        entry.get("role_id")
     ))
 
     conn.commit()
     conn.close()
 
 def delete_entry(guild_id, user_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     cur = conn.cursor()
 
     cur.execute("DELETE FROM entries WHERE guild_id=? AND user_id=?", (guild_id, user_id))
@@ -89,17 +91,19 @@ def delete_entry(guild_id, user_id):
     conn.close()
 
 def add_history(guild_id, winner_id, role_name):
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     cur = conn.cursor()
 
-    cur.execute("INSERT INTO history (guild_id, winner_id, role_name) VALUES (?, ?, ?)",
-                (guild_id, winner_id, role_name))
+    cur.execute("""
+    INSERT INTO history (guild_id, winner_id, role_name)
+    VALUES (?, ?, ?)
+    """, (guild_id, winner_id, role_name))
 
     conn.commit()
     conn.close()
 
 def get_history(guild_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     cur = conn.cursor()
 
     cur.execute("""
@@ -176,12 +180,15 @@ async def role(interaction: discord.Interaction, name: str, color: str = None, u
     if color:
         color = color.replace("#", "")
 
+    # 既存データ取得（role_id維持）
+    old = get_entries(guild_id).get(uid)
+
     entry = {
         "role_name": name,
         "color": color,
         "target": str(user.id) if user else uid,
         "weight": 1,
-        "role_id": None
+        "role_id": old.get("role_id") if old else None
     }
 
     save_entry(guild_id, uid, entry)
@@ -212,7 +219,10 @@ async def delete(interaction: discord.Interaction, user: discord.Member = None):
         if entry.get("role_id"):
             role = interaction.guild.get_role(entry["role_id"])
             if role:
-                await role.delete()
+                try:
+                    await role.delete()
+                except:
+                    pass
 
         delete_entry(guild_id, uid)
         await interaction.response.send_message("削除しました", ephemeral=True)
@@ -234,7 +244,10 @@ async def delete(interaction: discord.Interaction, user: discord.Member = None):
     if entry.get("role_id"):
         role = interaction.guild.get_role(entry["role_id"])
         if role:
-            await role.delete()
+            try:
+                await role.delete()
+            except:
+                pass
 
     delete_entry(guild_id, target_id)
     await interaction.response.send_message(f"{user.display_name} を削除しました")
@@ -272,7 +285,10 @@ async def dice(interaction: discord.Interaction):
         if entry.get("role_id"):
             old = interaction.guild.get_role(entry["role_id"])
             if old:
-                await old.delete()
+                try:
+                    await old.delete()
+                except:
+                    pass
 
         role = await interaction.guild.create_role(name=entry["role_name"], color=color)
         await role.edit(position=interaction.guild.me.top_role.position - 1)
@@ -284,7 +300,7 @@ async def dice(interaction: discord.Interaction):
             if uid == winner_id:
                 e["weight"] = 1
             else:
-                e["weight"] = min(e.get("weight", 1) + 0.5, 5)
+                e["weight"] = min(e.get("weight", 1) + 0.5, MAX_WEIGHT)
 
             save_entry(guild_id, uid, e)
 
@@ -344,11 +360,10 @@ async def history(interaction: discord.Interaction):
 # =========================
 # 起動
 # =========================
-import shutil
-import os
-
 @client.event
 async def on_ready():
+    os.makedirs("/data", exist_ok=True)
+
     if not os.path.exists("/data/data.db"):
         shutil.copy("data.db", "/data/data.db")
         print("DBコピー完了")
@@ -356,5 +371,4 @@ async def on_ready():
     init_db()
     await tree.sync()
     print("起動完了")
-
 client.run(TOKEN)
