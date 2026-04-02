@@ -196,7 +196,7 @@ def create_pie_chart(entries, guild):
         else:
             colors.append("#5865F2")
 
-    fig, ax = plt.subplots(figsize=(4, 4))
+    fig, ax = plt.subplots(figsize=(2, 2))
 
     wedges, texts, autotexts = ax.pie(
         sizes,
