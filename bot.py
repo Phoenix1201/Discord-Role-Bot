@@ -448,7 +448,7 @@ async def history(interaction: discord.Interaction):
 
     embed = discord.Embed(
         title="履歴",
-        description=desc or "履歴なし"
+        description=desc or "履歴なし",
         color = discord.Color.blurple()
     )
     embed.set_footer(text="直近10件")
