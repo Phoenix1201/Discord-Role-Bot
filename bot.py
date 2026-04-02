@@ -116,6 +116,26 @@ def get_history(guild_id):
     return rows
 
 # =========================
+# 上書き確認ボタン
+# =========================
+class ConfirmView(discord.ui.View):
+    def __init__(self, guild_id, uid, entry):
+        super().__init__(timeout=30)
+        self.guild_id = guild_id
+        self.uid = uid
+        self.entry = entry
+
+    @discord.ui.button(label="上書きする", style=discord.ButtonStyle.green)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        save_entry(self.guild_id, self.uid, self.entry)
+        embed = create_role_embed("✅上書きしました", self.entry["role_name"], self.entry["color"])
+        await interaction.response.edit_message(embed=embed, view=None)
+
+    @discord.ui.button(label="キャンセル", style=discord.ButtonStyle.red)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="キャンセルしました", embed=None, view=None)
+
+# =========================
 # 抽選
 # =========================
 def pick_winner(entries):
@@ -180,7 +200,6 @@ async def role(interaction: discord.Interaction, name: str, color: str = None, u
     if color:
         color = color.replace("#", "")
 
-    # 既存データ取得（role_id維持）
     old = get_entries(guild_id).get(uid)
 
     entry = {
@@ -191,6 +210,18 @@ async def role(interaction: discord.Interaction, name: str, color: str = None, u
         "role_id": old.get("role_id") if old else None
     }
 
+    # 既に登録あり → 確認出す
+    if old:
+        embed = create_role_embed("⚠️既に登録があります", name, color)
+        await interaction.response.send_message(
+            "上書きしますか？",
+            embed=embed,
+            view=ConfirmView(guild_id, uid, entry),
+            ephemeral=True
+        )
+        return
+
+    # 新規登録
     save_entry(guild_id, uid, entry)
 
     embed = create_role_embed("✅登録しました", name, color)
@@ -225,12 +256,12 @@ async def delete(interaction: discord.Interaction, user: discord.Member = None):
                     pass
 
         delete_entry(guild_id, uid)
-        await interaction.response.send_message("削除しました", ephemeral=True)
+        await interaction.response.send_message("登録を解除しました", ephemeral=True)
         return
 
     # 管理者
     if not user:
-        await interaction.response.send_message("ユーザー指定して", ephemeral=True)
+        await interaction.response.send_message("ユーザーを指定して下さい", ephemeral=True)
         return
 
     target_id = str(user.id)
@@ -250,7 +281,7 @@ async def delete(interaction: discord.Interaction, user: discord.Member = None):
                 pass
 
     delete_entry(guild_id, target_id)
-    await interaction.response.send_message(f"{user.display_name} を削除しました")
+    await interaction.response.send_message(f"{user.display_name} の登録を解除しました")
 
 # =========================
 # /dice
