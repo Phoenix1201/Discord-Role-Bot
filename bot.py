@@ -127,7 +127,7 @@ class ConfirmView(discord.ui.View):
         self.message = None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-    return str(interaction.user.id) == self.uid
+        return str(interaction.user.id) == self.uid
     
     async def on_timeout(self):
         for item in self.children:
