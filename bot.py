@@ -124,11 +124,29 @@ class ConfirmView(discord.ui.View):
         self.guild_id = guild_id
         self.uid = uid
         self.entry = entry
+        self.message = None
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+    return str(interaction.user.id) == self.uid
+    
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+
+        if self.message:
+            await self.message.edit(
+                content="⏰ 時間切れでキャンセルされました",
+                view=self
+            )
 
     @discord.ui.button(label="上書きする", style=discord.ButtonStyle.green)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
         save_entry(self.guild_id, self.uid, self.entry)
-        member = interaction.guild.get_member(int(self.entry["target"]))
+        try:
+            member = await interaction.guild.fetch_member(int(self.entry["target"]))
+        except:
+            member = None
         embed = create_role_embed(
             "✅上書きしました",
             self.entry["role_name"],
@@ -139,7 +157,11 @@ class ConfirmView(discord.ui.View):
 
     @discord.ui.button(label="キャンセル", style=discord.ButtonStyle.red)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.edit_original_response(content="キャンセルしました", embed=None, view=None)
+        await interaction.response.edit_message(
+            content="キャンセルしました",
+            embed=None,
+            view=None
+        )
 
 # =========================
 # 抽選
@@ -239,12 +261,15 @@ async def role(interaction: discord.Interaction, name: str, color: str = None, u
             target_member
         )
 
+        view = ConfirmView(guild_id, uid, entry)
         await interaction.response.send_message(
-            content="⚠️ 上書きしますか？\n（下：現在 → 新）",
+            content="⚠️ 上書きしますか？",
             embeds=[old_embed, new_embed],
-            view=ConfirmView(guild_id, uid, entry),
+            view=view,
             ephemeral=True
         )
+        view.message = await interaction.original_response()
+        
         return
 
     # 新規登録
