@@ -294,7 +294,7 @@ def create_pie_chart(entries, guild):
             w = bbox[2] - bbox[0]
             h = bbox[3] - bbox[1]
 
-            for dx, dy in [(-3,0),(3,0),(0,-3),(0,3),(-2,-2),(2,2),(-2,2),(2,-2)]:
+            for dx, dy in [(-2,0),(2,0),(0,-2),(0,2)]:
                 draw.text((tx - w/2 + dx, ty - h/2 + dy), text, fill="black", font=FONT)
 
             draw.text((tx - w/2, ty - h/2), text, fill="white", font=FONT)
@@ -396,8 +396,6 @@ class DiceView(discord.ui.View):
 
         add_history(self.guild_id, winner_id, entry["role_name"])
 
-        # 👇 確率計算（神機能）
-
         embed = create_role_embed(
             "🎉当選！",
             entry["role_name"],
@@ -416,12 +414,27 @@ class WeightSelect(discord.ui.Select):
     def __init__(self, entries, guild_id):
         self.entries = entries
         self.guild_id = guild_id
+        self.guild = guild
 
         options = []
-        for uid in entries.keys():
+
+        sorted_entries = sorted(
+            entries.items(),
+            key=lambda x: x[1]["weight"],
+            reverse=True
+        )
+
+        for i, (uid, e) in enumerate(sorted_entries, start=1):
+            member = self.guild.get_member(int(uid))
+            name = member.display_name if member else uid
+        
+            weight = e["weight"]
+
+            label = f"{i}. {name} (w={weight:.2f})"
+
             options.append(
                 discord.SelectOption(
-                    label=str(uid),
+                    label=label[:100],
                     value=uid
                 )
             )
@@ -477,9 +490,9 @@ class WeightModal(discord.ui.Modal, title="重み変更"):
         )
 
 class WeightView(discord.ui.View):
-    def __init__(self, entries, guild_id):
+    def __init__(self, entries, guild_id, guild):
         super().__init__(timeout=60)
-        self.add_item(WeightSelect(entries, guild_id))
+        self.add_item(WeightSelect(entries, guild_id, guild))
 # =========================
 # Embed
 # =========================
@@ -794,7 +807,7 @@ async def weight(interaction: discord.Interaction):
         await interaction.response.send_message("登録がありません", ephemeral=True)
         return
 
-    view = WeightView(entries, guild_id)
+    view = WeightView(entries, guild_id, interaction.guild)
 
     await interaction.response.send_message(
         "重みを変更するユーザーを選択してください",
