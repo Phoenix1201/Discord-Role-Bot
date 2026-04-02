@@ -302,6 +302,10 @@ class DiceView(discord.ui.View):
             entry["color"],
             member
         )
+        
+        embed.description += f"\n当選確率: {chance:.1f}%"
+
+        await interaction.followup.send(embed=embed)
 
 # =========================
 # Embed
