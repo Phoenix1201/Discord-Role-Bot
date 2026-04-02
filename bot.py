@@ -5,10 +5,10 @@ from dotenv import load_dotenv
 import random
 import sqlite3
 import shutil
+import matplot.font_manager as fm
 import matplotlib.pyplot as plt
 from io import BytesIO
 import asyncio
-import japanize_matplotlib
 
 DB_PATH = "/data/data.db"
 MAX_WEIGHT = 5
@@ -218,7 +218,11 @@ def create_pie_chart(entries, guild):
         title="参加者",
         loc="center left",
         bbox_to_anchor=(1, 0.5)
+        prop=font_prop
     )
+
+    for autotext in autotexts:
+        autotext.set_fontproperties(font_prop)
 
     buf = BytesIO()
     plt.savefig(buf, format='png', bbox_inches='tight')
@@ -347,6 +351,11 @@ def create_role_embed(title, role_name, color_code, target_member=None):
 # =========================
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
+
+font_path = "./fonts/NotoSansJP-VariableFont_wght.ttf"
+font_prop = fm.FontProperties(fname=font_path)
+
+plt.rcParams['font.family'] = font_prop.get_name()
 
 intents = discord.Intents.default()
 intents.members = True
