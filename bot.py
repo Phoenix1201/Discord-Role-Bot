@@ -2,43 +2,127 @@ import discord
 from discord import app_commands
 import os
 from dotenv import load_dotenv
-import json
 import random
+import sqlite3
+
+DB_PATH = "/data/data.db"  # ローカルなら "data.db"
 
 # =========================
-# データ処理（サーバー対応）
+# DB初期化
 # =========================
-def load_data():
-    try:
-        with open("data.json", "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except:
-        data = {}
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS entries (
+        guild_id TEXT,
+        user_id TEXT,
+        role_name TEXT,
+        color TEXT,
+        target TEXT,
+        weight REAL,
+        role_id INTEGER,
+        PRIMARY KEY (guild_id, user_id)
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS history (
+        guild_id TEXT,
+        winner_id TEXT,
+        role_name TEXT,
+        ts DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    conn.commit()
+    conn.close()
+
+# =========================
+# DB操作
+# =========================
+def get_entries(guild_id):
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM entries WHERE guild_id=?", (guild_id,))
+    rows = cur.fetchall()
+    conn.close()
+
+    data = {}
+    for r in rows:
+        data[r[1]] = {
+            "role_name": r[2],
+            "color": r[3],
+            "target": r[4],
+            "weight": r[5],
+            "role_id": r[6]
+        }
     return data
 
-def save_data(data):
-    with open("data.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
+def save_entry(guild_id, user_id, entry):
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
 
-def get_guild_data(data, guild_id):
-    if guild_id not in data:
-        data[guild_id] = {"entries": {}, "history": []}
-    return data[guild_id]
+    cur.execute("""
+    INSERT OR REPLACE INTO entries VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        guild_id,
+        user_id,
+        entry["role_name"],
+        entry["color"],
+        entry["target"],
+        entry["weight"],
+        entry["role_id"]
+    ))
+
+    conn.commit()
+    conn.close()
+
+def delete_entry(guild_id, user_id):
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("DELETE FROM entries WHERE guild_id=? AND user_id=?", (guild_id, user_id))
+    conn.commit()
+    conn.close()
+
+def add_history(guild_id, winner_id, role_name):
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("INSERT INTO history (guild_id, winner_id, role_name) VALUES (?, ?, ?)",
+                (guild_id, winner_id, role_name))
+
+    conn.commit()
+    conn.close()
+
+def get_history(guild_id):
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("""
+    SELECT winner_id, role_name FROM history
+    WHERE guild_id=? ORDER BY ts DESC LIMIT 10
+    """, (guild_id,))
+
+    rows = cur.fetchall()
+    conn.close()
+    return rows
 
 # =========================
-# 重み付き抽選
+# 抽選
 # =========================
 def pick_winner(entries):
     users = list(entries.keys())
     weights = [entries[u].get("weight", 1) for u in users]
-
     if not users:
         return None
-
     return random.choices(users, weights=weights, k=1)[0]
 
 # =========================
-# Embed生成
+# Embed
 # =========================
 def create_role_embed(title, role_name, color_code, target=None):
     if color_code:
@@ -84,98 +168,75 @@ dice_running = False
 # /role
 # =========================
 @tree.command(name="role", description="ロール登録")
-@app_commands.describe(
-    name="ロール名",
-    color="カラーコード",
-    user="対象ユーザー"
-)
 async def role(interaction: discord.Interaction, name: str, color: str = None, user: discord.Member = None):
 
-    data = load_data()
     guild_id = str(interaction.guild.id)
-    gdata = get_guild_data(data, guild_id)
-
     uid = str(interaction.user.id)
 
     if color:
         color = color.replace("#", "")
 
-    target_id = str(user.id) if user else uid
-
-    gdata["entries"][uid] = {
+    entry = {
         "role_name": name,
         "color": color,
-        "target": target_id,
-        "weight": 1,  # ← 固定
-        "role_id": gdata["entries"].get(uid, {}).get("role_id")
+        "target": str(user.id) if user else uid,
+        "weight": 1,
+        "role_id": None
     }
 
-    save_data(data)
+    save_entry(guild_id, uid, entry)
 
     embed = create_role_embed("✅登録しました", name, color)
     await interaction.response.send_message(embed=embed)
 
 # =========================
-# /dice
+# /delete
 # =========================
 @tree.command(name="delete", description="登録削除")
-@app_commands.describe(user="削除対象（管理者のみ）")
 async def delete(interaction: discord.Interaction, user: discord.Member = None):
 
-    data = load_data()
     guild_id = str(interaction.guild.id)
-    gdata = get_guild_data(data, guild_id)
+    entries = get_entries(guild_id)
 
     uid = str(interaction.user.id)
     is_admin = interaction.user.guild_permissions.administrator
 
-    # ===== 一般ユーザー =====
+    # 一般ユーザー
     if not is_admin:
-        if uid not in gdata["entries"]:
+        if uid not in entries:
             await interaction.response.send_message("登録がありません", ephemeral=True)
             return
 
-        entry = gdata["entries"][uid]
+        entry = entries[uid]
 
-        # ロール削除
         if entry.get("role_id"):
             role = interaction.guild.get_role(entry["role_id"])
             if role:
-                try:
-                    await role.delete()
-                except:
-                    pass
+                await role.delete()
 
-        del gdata["entries"][uid]
-        save_data(data)
-
-        await interaction.response.send_message("の登録を解除しました", ephemeral=True)
+        delete_entry(guild_id, uid)
+        await interaction.response.send_message("削除しました", ephemeral=True)
         return
 
-    # ===== 管理者 =====
+    # 管理者
     if not user:
         await interaction.response.send_message("ユーザー指定して", ephemeral=True)
         return
 
     target_id = str(user.id)
 
-    if target_id not in gdata["entries"]:
+    if target_id not in entries:
         await interaction.response.send_message("登録なし", ephemeral=True)
         return
 
-    entry = gdata["entries"][target_id]
+    entry = entries[target_id]
 
     if entry.get("role_id"):
         role = interaction.guild.get_role(entry["role_id"])
         if role:
-            try:
-                await role.delete()
-            except:
-                pass
+            await role.delete()
 
-    del gdata["entries"][target_id]
-    save_data(data)
-
+    delete_entry(guild_id, target_id)
     await interaction.response.send_message(f"{user.display_name} を削除しました")
 
 # =========================
@@ -194,68 +255,42 @@ async def dice(interaction: discord.Interaction):
     try:
         await interaction.response.defer()
 
-        data = load_data()
         guild_id = str(interaction.guild.id)
-        gdata = get_guild_data(data, guild_id)
+        entries = get_entries(guild_id)
 
-        if not gdata["entries"]:
+        if not entries:
             await interaction.followup.send("登録なし")
             return
 
-        winner_id = pick_winner(gdata["entries"])
-        entry = gdata["entries"][winner_id]
+        winner_id = pick_winner(entries)
+        entry = entries[winner_id]
 
         member = await interaction.guild.fetch_member(int(entry["target"]))
 
         color = discord.Color(int(entry["color"], 16)) if entry["color"] else discord.Color.default()
 
-        # 旧ロール削除
         if entry.get("role_id"):
             old = interaction.guild.get_role(entry["role_id"])
             if old:
-                try:
-                    await old.delete()
-                except:
-                    pass
+                await old.delete()
 
-        # 新規作成
-        role = await interaction.guild.create_role(
-            name=entry["role_name"],
-            color=color
-        )
-
-        entry["role_id"] = role.id
-
+        role = await interaction.guild.create_role(name=entry["role_name"], color=color)
         await role.edit(position=interaction.guild.me.top_role.position - 1)
         await member.add_roles(role)
 
-        # =========================
-        # 🎯 weight更新（ここ追加）
-        # =========================
-        for uid, e in gdata["entries"].items():
+        entry["role_id"] = role.id
+
+        for uid, e in entries.items():
             if uid == winner_id:
                 e["weight"] = 1
             else:
-                current = e.get("weight", 1)
-                e["weight"] = min(current + 0.5, 5.0)  # 上限5
+                e["weight"] = min(e.get("weight", 1) + 0.5, 5)
 
-        # =========================
-        # 履歴
-        # =========================
-        gdata["history"].append({
-            "winner_id": winner_id,
-            "role_name": entry["role_name"]
-        })
-        gdata["history"] = gdata["history"][-10:]
+            save_entry(guild_id, uid, e)
 
-        save_data(data)
+        add_history(guild_id, winner_id, entry["role_name"])
 
-        embed = create_role_embed(
-            "🎲当選！",
-            entry["role_name"],
-            entry["color"],
-            member.display_name
-        )
+        embed = create_role_embed("🎲当選！", entry["role_name"], entry["color"], member.display_name)
         await interaction.followup.send(embed=embed)
 
     finally:
@@ -268,27 +303,21 @@ async def dice(interaction: discord.Interaction):
 async def list_roles(interaction: discord.Interaction):
     await interaction.response.defer()
 
-    data = load_data()
-    gdata = get_guild_data(data, str(interaction.guild.id))
+    entries = get_entries(str(interaction.guild.id))
 
-    embed = discord.Embed(
-        title="📋一覧",
-        color = discord.Color.blurple()
-    )
+    embed = discord.Embed(title="📋一覧", color=discord.Color.blurple())
 
-    for uid, entry in gdata["entries"].items():
+    for uid, entry in entries.items():
         member = interaction.guild.get_member(int(uid))
-        name = member.display_name if member else f"ID:{uid}"
-
-        weight = entry.get("weight", 1)
+        name = member.display_name if member else uid
 
         embed.add_field(
             name=name,
-            value=f"{entry['role_name']}\n倍率: {weight:.1f}",
+            value=f"{entry['role_name']}\n倍率: {entry['weight']:.1f}",
             inline=False
         )
-    count = len(gdata["entries"])
-    embed.set_footer(text=f"登録人数: {count}人" if count else "登録なし")
+
+    embed.set_footer(text=f"登録人数: {len(entries)}人" if entries else "登録なし")
 
     await interaction.followup.send(embed=embed)
 
@@ -299,22 +328,17 @@ async def list_roles(interaction: discord.Interaction):
 async def history(interaction: discord.Interaction):
     await interaction.response.defer()
 
-    data = load_data()
-    gdata = get_guild_data(data, str(interaction.guild.id))
+    rows = get_history(str(interaction.guild.id))
 
     desc = ""
+    for i, (uid, role) in enumerate(rows, 1):
+        member = interaction.guild.get_member(int(uid))
+        name = member.display_name if member else uid
+        desc += f"{i}. {name} → {role}\n"
 
-    for i, h in enumerate(reversed(gdata["history"]), 1):
-        member = interaction.guild.get_member(int(h["winner_id"]))
-        name = member.display_name if member else "不明"
-        desc += f"{i}. {name} → {h['role_name']}\n"
+    embed = discord.Embed(title="履歴", description=desc or "履歴なし")
+    embed.set_footer(text="直近10件")
 
-    embed = discord.Embed(
-        title="履歴",
-        description=desc,
-        color = discord.Color.blurple()
-        )
-    embed.set_footer(text="直近の10件を表示")
     await interaction.followup.send(embed=embed)
 
 # =========================
@@ -322,6 +346,7 @@ async def history(interaction: discord.Interaction):
 # =========================
 @client.event
 async def on_ready():
+    init_db()
     await tree.sync()
     print("起動完了")
 
