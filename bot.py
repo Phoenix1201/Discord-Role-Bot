@@ -5,8 +5,6 @@ from dotenv import load_dotenv
 import random
 import sqlite3
 import shutil
-import matplotlib.font_manager as fm
-import matplotlib.pyplot as plt
 from io import BytesIO
 import asyncio
 
@@ -180,6 +178,8 @@ def pick_winner(entries):
     return random.choices(users, weights=weights, k=1)[0]
 
 def create_pie_chart(entries, guild):
+    import matplotlib.pyplot as plt
+    
     sizes = []
     colors = []
     numbered_labels = []
@@ -208,10 +208,7 @@ def create_pie_chart(entries, guild):
     )
 
     ax.axis('equal')
-    if font_prop:
-        ax.set_title("参加者", fontproperties=font_prop)
-    else:
-        ax.set_title("Lottery")
+    ax.set_title("Participants")
 
     plt.tight_layout()
 
@@ -342,16 +339,6 @@ def create_role_embed(title, role_name, color_code, target_member=None):
 # =========================
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
-
-font_path = "./fonts/NotoSansJP-Regular.ttf"
-if os.path.exists(font_path):
-    font_prop = fm.FontProperties(fname=font_path)
-    try:
-        plt.rcParams['font.family'] = font_prop.get_name()
-    except:
-        pass
-else:
-    font_prop = None
 
 intents = discord.Intents.default()
 intents.members = True
