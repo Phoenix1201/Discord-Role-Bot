@@ -17,7 +17,7 @@ except:
     SMALL_FONT = FONT
 
 DB_PATH = "/data/data.db"
-MAX_WEIGHT = 5
+MAX_WEIGHT = 3
 
 # =========================
 # DB初期化
@@ -189,29 +189,19 @@ from PIL import Image, ImageDraw
 import math
 from io import BytesIO
 
-from PIL import Image, ImageDraw
-import math
-from io import BytesIO
-
-from PIL import Image, ImageDraw
-import math
-from io import BytesIO
-
 def create_pie_chart(entries, guild):
-    size = 400
-    scale = 1
-
-    img = Image.new("RGB", (size * scale, size * scale), "white")
+    size = 500
+    img = Image.new("RGB", (size, size), "white")
     draw = ImageDraw.Draw(img)
 
-    center = size * scale // 2
-    radius = size * scale // 2 - 80  # ← 小さめ
+    center = size // 2
+    radius = 170
 
     total = sum(e["weight"] for e in entries.values())
 
-    start_angle = -90  # ← 上スタート（重要）
+    start_angle = -90  # 上スタート
 
-    for uid, e in entries.items():
+    for i, (uid, e) in enumerate(entries.items(), start=1):
         weight = e["weight"]
         angle = 360 * (weight / total)
 
@@ -224,7 +214,7 @@ def create_pie_chart(entries, guild):
         else:
             color = "#5865F2"
 
-        # 円描画
+        # ===== 円 =====
         draw.pieslice(
             [
                 center - radius,
@@ -238,53 +228,48 @@ def create_pie_chart(entries, guild):
             outline="white"
         )
 
-        # ===== 外側ラベル =====
         percent = (weight / total * 100)
+        mid_angle = math.radians(start_angle + angle / 2)
 
+        # ===== 中に％ =====
         if percent >= 5:
-            mid_angle = math.radians(start_angle + angle / 2)
+            text = f"{percent:.0f}%"
 
-            text = f"{percent:.1f}%"
-
-            # 線
-            line_start_x = center + (radius * 0.9) * math.cos(mid_angle)
-            line_start_y = center + (radius * 0.9) * math.sin(mid_angle)
-
-            line_end_x = center + (radius * 1.2) * math.cos(mid_angle)
-            line_end_y = center + (radius * 1.2) * math.sin(mid_angle)
-
-            draw.line(
-                [(line_start_x, line_start_y), (line_end_x, line_end_y)],
-                fill="black",
-                width=2
-            )
-
-            # テキスト位置
-            text_x = center + (radius * 1.35) * math.cos(mid_angle)
-            text_y = center + (radius * 1.35) * math.sin(mid_angle)
+            tx = center + (radius * 0.6) * math.cos(mid_angle)
+            ty = center + (radius * 0.6) * math.sin(mid_angle)
 
             bbox = draw.textbbox((0, 0), text, font=FONT)
             w = bbox[2] - bbox[0]
             h = bbox[3] - bbox[1]
 
             draw.text(
-                (text_x - w/2, text_y - h/2),
+                (tx - w/2, ty - h/2),
                 text,
-                fill="black",
+                fill="white",
                 font=FONT
             )
+
+        # ===== 外側：番号だけ =====
+        label = str(i)
+
+        lx = center + (radius * 1.15) * math.cos(mid_angle)
+        ly = center + (radius * 1.15) * math.sin(mid_angle)
+
+        bbox = draw.textbbox((0, 0), label, font=FONT)
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+
+        draw.text(
+            (lx - w/2, ly - h/2),
+            label,
+            fill="black",
+            font=FONT
+        )
 
         start_angle += angle
 
     # タイトル
-    title = "Participants"
-    bbox = draw.textbbox((0, 0), title, font=FONT)
-    draw.text(
-        (center - (bbox[2] / 2), 10),
-        title,
-        fill="black",
-        font=FONT
-    )
+    draw.text((20, 10), "Participants", fill="black", font=FONT)
 
     buf = BytesIO()
     img.save(buf, format="PNG")
@@ -317,6 +302,10 @@ class DiceView(discord.ui.View):
 
         winner_id = pick_winner(self.entries)
         entry = self.entries[winner_id]
+
+        winner_weight = entry["weight"]
+        total = sum(e["weight"] for e in self.entries.values())
+        chance = winner_weight / total * 100100
 
         try:
             member = await interaction.guild.fetch_member(int(entry["target"]))
@@ -351,15 +340,13 @@ class DiceView(discord.ui.View):
             if uid == winner_id:
                 e["weight"] = 1
             else:
-                e["weight"] = min(e.get("weight", 1) + 0.5, MAX_WEIGHT)
+                e["weight"] = min(e.get("weight", 1) + 0.25, MAX_WEIGHT)
 
             save_entry(self.guild_id, uid, e)
 
         add_history(self.guild_id, winner_id, entry["role_name"])
 
         # 👇 確率計算（神機能）
-        total = sum(e["weight"] for e in self.entries.values())
-        chance = entry["weight"] / total * 100
 
         embed = create_role_embed(
             "🎉当選！",
