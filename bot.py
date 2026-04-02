@@ -217,29 +217,29 @@ async def role(interaction: discord.Interaction, name: str, color: str = None, u
     }
 
     # 既に登録あり → 確認出す
-if old:
-    old_member = interaction.guild.get_member(int(old["target"]))
-    old_embed = create_role_embed(
-        "現在の設定",
-        old["role_name"],
-        old["color"],
-        old_member
-    )
+    if old:
+        old_member = interaction.guild.get_member(int(old["target"]))
+        old_embed = create_role_embed(
+            "現在の設定",
+            old["role_name"],
+            old["color"],
+            old_member
+        )
+    
+        new_embed = create_role_embed(
+            "新しい設定",
+            name,
+            color,
+            target_member
+        )
 
-    new_embed = create_role_embed(
-        "新しい設定",
-        name,
-        color,
-        target_member
-    )
-
-    await interaction.response.send_message(
-        content="⚠️ 上書きしますか？\n（下：現在 → 新）",
-        embeds=[old_embed, new_embed],
-        view=ConfirmView(guild_id, uid, entry),
-        ephemeral=True
-    )
-    return
+        await interaction.response.send_message(
+            content="⚠️ 上書きしますか？\n（下：現在 → 新）",
+            embeds=[old_embed, new_embed],
+            view=ConfirmView(guild_id, uid, entry),
+            ephemeral=True
+        )
+        return
 
     # 新規登録
     save_entry(guild_id, uid, entry)
