@@ -5,6 +5,9 @@ from dotenv import load_dotenv
 import random
 import sqlite3
 import shutil
+import matplotlib.pyplot as plt
+from io import BytesIO
+import asyncio
 
 DB_PATH = "/data/data.db"
 MAX_WEIGHT = 5
@@ -175,6 +178,131 @@ def pick_winner(entries):
         return None
     return random.choices(users, weights=weights, k=1)[0]
 
+def create_pie_chart(entries, guild):
+    labels = []
+    sizes = []
+    colors = []
+
+    for uid, e in entries.items():
+        member = guild.get_member(int(uid))
+        name = member.display_name if member else uid
+
+        labels.append(name)
+        sizes.append(e["weight"])
+
+        # 色処理
+        if e["color"]:
+            try:
+                colors.append(f"#{e['color']}")
+            except:
+                colors.append("#5865F2")
+        else:
+            colors.append("#5865F2")
+
+    fig, ax = plt.subplots()
+
+    wedges, texts, autotexts = ax.pie(
+        sizes,
+        labels=None,
+        colors=colors,
+        autopct='%1.1f%%',
+        startangle=90
+    )
+
+    ax.axis('equal')
+
+    ax.legend(
+        wedges,
+        labels,
+        title="参加者",
+        loc="center left",
+        bbox_to_anchor=(1, 0.5)
+    )
+
+    buf = BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight')
+    buf.seek(0)
+    plt.close(fig)
+
+    return buf
+
+class DiceView(discord.ui.View):
+    def __init__(self, entries, guild_id):
+        super().__init__(timeout=60)
+        self.entries = entries
+        self.guild_id = guild_id
+        self.used = False  # ← 二重押し防止
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return True  # 誰でも押せる（制限したいなら変更）
+
+    @discord.ui.button(label="🎲 抽選する", style=discord.ButtonStyle.green)
+    async def roll(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if self.used:
+            await interaction.response.send_message("もう抽選済みです", ephemeral=True)
+            return
+
+        self.used = True
+
+        # 👇 抽選中演出
+        await interaction.response.edit_message(content="🎲 抽選中...", view=None)
+
+        await asyncio.sleep(2)
+
+        winner_id = pick_winner(self.entries)
+        entry = self.entries[winner_id]
+
+        try:
+            member = await interaction.guild.fetch_member(int(entry["target"]))
+        except:
+            await interaction.followup.send("ユーザー不明")
+            return
+
+        # 👇 全ロール削除
+        for e in self.entries.values():
+            if e.get("role_id"):
+                r = interaction.guild.get_role(e["role_id"])
+                if r:
+                    try:
+                        await r.delete()
+                    except:
+                        pass
+
+        # 👇 ロール作成
+        try:
+            color = discord.Color(int(entry["color"], 16)) if entry["color"] else discord.Color.default()
+        except:
+            color = discord.Color.default()
+
+        role = await interaction.guild.create_role(name=entry["role_name"], color=color)
+        await role.edit(position=interaction.guild.me.top_role.position - 1)
+        await member.add_roles(role)
+
+        entry["role_id"] = role.id
+
+        # 👇 重み更新
+        for uid, e in self.entries.items():
+            if uid == winner_id:
+                e["weight"] = 1
+            else:
+                e["weight"] = min(e.get("weight", 1) + 0.5, MAX_WEIGHT)
+
+            save_entry(self.guild_id, uid, e)
+
+        add_history(self.guild_id, winner_id, entry["role_name"])
+
+        # 👇 確率計算（神機能）
+        total = sum(e["weight"] for e in self.entries.values())
+        chance = entry["weight"] / total * 100
+
+        embed = create_role_embed(
+            "🎉当選！",
+            entry["role_name"],
+            entry["color"],
+            member
+        )
+
 # =========================
 # Embed
 # =========================
@@ -221,7 +349,7 @@ intents.members = True
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-dice_running = False
+dice_running = {}
 
 # =========================
 # /role
@@ -351,65 +479,40 @@ async def delete(interaction: discord.Interaction, user: discord.Member = None):
 # =========================
 @tree.command(name="dice", description="抽選")
 async def dice(interaction: discord.Interaction):
-    global dice_running
+    gid = str(interaction.guild.id)
 
-    if dice_running:
+    if dice_running.get(gid):
         await interaction.response.send_message("抽選中です", ephemeral=True)
         return
 
-    dice_running = True
+    dice_running[gid] = True
 
     try:
         await interaction.response.defer()
 
-        guild_id = str(interaction.guild.id)
-        entries = get_entries(guild_id)
+        entries = get_entries(gid)
 
         if not entries:
             await interaction.followup.send("登録なし")
             return
 
-        winner_id = pick_winner(entries)
-        entry = entries[winner_id]
+        # 🎨 円グラフ
+        img = create_pie_chart(entries, interaction.guild)
+        file = discord.File(img, filename="chart.png")
 
-        member = await interaction.guild.fetch_member(int(entry["target"]))
-
-        color = discord.Color(int(entry["color"], 16)) if entry["color"] else discord.Color.default()
-
-        if entry.get("role_id"):
-            old = interaction.guild.get_role(entry["role_id"])
-            if old:
-                try:
-                    await old.delete()
-                except:
-                    pass
-
-        role = await interaction.guild.create_role(name=entry["role_name"], color=color)
-        await role.edit(position=interaction.guild.me.top_role.position - 1)
-        await member.add_roles(role)
-
-        entry["role_id"] = role.id
-
-        for uid, e in entries.items():
-            if uid == winner_id:
-                e["weight"] = 1
-            else:
-                e["weight"] = min(e.get("weight", 1) + 0.5, MAX_WEIGHT)
-
-            save_entry(guild_id, uid, e)
-
-        add_history(guild_id, winner_id, entry["role_name"])
-
-        embed = create_role_embed(
-            "🎲当選！",
-            entry["role_name"],
-            entry["color"],
-            member
+        embed = discord.Embed(
+            title="🎲 抽選準備",
+            description="ボタンを押して抽選！",
+            color=discord.Color.blurple()
         )
-        await interaction.followup.send(embed=embed)
+        embed.set_image(url="attachment://chart.png")
+
+        view = DiceView(entries, gid)
+
+        await interaction.followup.send(embed=embed, file=file, view=view)
 
     finally:
-        dice_running = False
+        dice_running[gid] = False
 
 # =========================
 # /list
@@ -467,9 +570,8 @@ async def history(interaction: discord.Interaction):
 async def on_ready():
     os.makedirs("/data", exist_ok=True)
 
-    if not os.path.exists("/data/data.db"):
-        shutil.copy("data.db", "/data/data.db")
-        print("DBコピー完了")
+    if not os.path.exists(DB_PATH):
+        open(DB_PATH, "a").close()
 
     init_db()
     await tree.sync()
