@@ -10,8 +10,8 @@ import asyncio
 from PIL import ImageFont
 
 try:
-    FONT = ImageFont.truetype("NotoSansJP-Regular.otf", 24)
-    SMALL_FONT = ImageFont.truetype("NotoSansJP-Regular.otf", 18)
+    FONT = ImageFont.truetype("NotoSansJP-Regular.otf", 60)
+    SMALL_FONT = ImageFont.truetype("NotoSansJP-Regular.otf", 48)
 except:
     FONT = ImageFont.load_default()
     SMALL_FONT = FONT
@@ -242,12 +242,10 @@ def create_pie_chart(entries, guild):
             w = bbox[2] - bbox[0]
             h = bbox[3] - bbox[1]
 
-            draw.text(
-                (tx - w/2, ty - h/2),
-                text,
-                fill="white",
-                font=FONT
-            )
+            for dx, dy in [(-2,0),(2,0),(0,-2),(0,2)]:
+                draw.text((tx - w/2 + dx, ty - h/2 + dy), text, fill="black", font=FONT)
+
+            draw.text((tx - w/2, ty - h/2), text, fill="white", font=FONT)
 
         # ===== 外側：番号だけ =====
         label = str(i)
