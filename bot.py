@@ -148,7 +148,8 @@ def pick_winner(entries):
 # =========================
 # Embed
 # =========================
-def create_role_embed(title, role_name, color_code, target=None):
+def create_role_embed(title, role_name, color_code, target_member=None):
+    # 色処理
     if color_code:
         try:
             color = discord.Color(int(color_code, 16))
@@ -163,9 +164,13 @@ def create_role_embed(title, role_name, color_code, target=None):
         color_text = "未指定"
         image_url = None
 
-    desc = f"ロール名：{role_name}\n色：{color_text}"
-    if target:
-        desc += f"\n対象：{target}"
+    # 対象ユーザー表示
+    if target_member:
+        target_text = target_member.display_name
+    else:
+        target_text = "未指定"
+
+    desc = f"ロール名：{role_name}\n色：{color_text}\n対象：{target_text}"
 
     embed = discord.Embed(title=title, description=desc, color=color)
 
@@ -196,6 +201,7 @@ async def role(interaction: discord.Interaction, name: str, color: str = None, u
 
     guild_id = str(interaction.guild.id)
     uid = str(interaction.user.id)
+    target_member = user if user else interaction.user
 
     if color:
         color = color.replace("#", "")
@@ -211,20 +217,39 @@ async def role(interaction: discord.Interaction, name: str, color: str = None, u
     }
 
     # 既に登録あり → 確認出す
-    if old:
-        embed = create_role_embed("⚠️既に登録があります", name, color)
-        await interaction.response.send_message(
-            "上書きしますか？",
-            embed=embed,
-            view=ConfirmView(guild_id, uid, entry),
-            ephemeral=True
-        )
-        return
+if old:
+    old_member = interaction.guild.get_member(int(old["target"]))
+    old_embed = create_role_embed(
+        "現在の設定",
+        old["role_name"],
+        old["color"],
+        old_member
+    )
+
+    new_embed = create_role_embed(
+        "新しい設定",
+        name,
+        color,
+        target_member
+    )
+
+    await interaction.response.send_message(
+        content="⚠️ 上書きしますか？\n（下：現在 → 新）",
+        embeds=[old_embed, new_embed],
+        view=ConfirmView(guild_id, uid, entry),
+        ephemeral=True
+    )
+    return
 
     # 新規登録
     save_entry(guild_id, uid, entry)
 
-    embed = create_role_embed("✅登録しました", name, color)
+    embed = create_role_embed(
+        "✅登録しました",
+        name,
+        color,
+        target_member
+    )
     await interaction.response.send_message(embed=embed)
 
 # =========================
