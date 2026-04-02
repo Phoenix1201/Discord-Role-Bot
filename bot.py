@@ -215,15 +215,18 @@ def create_pie_chart(entries, guild):
     ax.legend(
         wedges,
         labels,
-        title="参加者",
         loc="center left",
         bbox_to_anchor=(1, 0.5),
         prop=font_prop if font_prop else None
     )
-
+    ax.set_title("参加者", fontproperties=font_prop)
     for autotext in autotexts:
         if font_prop:
             autotext.set_fontproperties(font_prop)
+
+    for text in texts:
+        if font_prop:
+            text.set_fontproperties(font_prop)
 
     buf = BytesIO()
     plt.savefig(buf, format='png', bbox_inches='tight')
@@ -353,10 +356,9 @@ def create_role_embed(title, role_name, color_code, target_member=None):
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
-font_path = "./fonts/NotoSansJP-VariableFont_wght.ttf"
+font_path = "./fonts/NotoSansJP-Regular.ttf"
 if os.path.exists(font_path):
     font_prop = fm.FontProperties(fname=font_path)
-    plt.rcParams['font.family'] = font_prop.get_name()
 else:
     font_prop = None
 
