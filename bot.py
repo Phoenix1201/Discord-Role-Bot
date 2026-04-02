@@ -226,6 +226,11 @@ dice_running = False
 # =========================
 # /role
 # =========================
+@app_commands.describe(
+    name="ロール名",
+    color="カラーコード（例: FF0000）",
+    user="対象ユーザー（未指定の場合は自分）"
+)
 @tree.command(name="role", description="ロール登録")
 async def role(interaction: discord.Interaction, name: str, color: str = None, user: discord.Member = None):
 
