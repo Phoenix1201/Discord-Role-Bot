@@ -52,6 +52,14 @@ def init_db():
     )
     """)
 
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS operators (
+        guild_id TEXT,
+        user_id TEXT,
+        PRIMARY KEY (guild_id, user_id)
+    )
+""")
+
     conn.commit()
     conn.close()
 
@@ -180,6 +188,46 @@ class ConfirmView(discord.ui.View):
         )
 
 # =========================
+# 管理者
+# =========================
+def add_operator(guild_id, user_id):
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    cur = conn.cursor()
+
+    cur.execute("""
+    INSERT OR IGNORE INTO operators VALUES (?, ?)
+    """, (guild_id, user_id))
+
+    conn.commit()
+    conn.close()
+
+
+def remove_operator(guild_id, user_id):
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    cur = conn.cursor()
+
+    cur.execute("""
+    DELETE FROM operators WHERE guild_id=? AND user_id=?
+    """, (guild_id, user_id))
+
+    conn.commit()
+    conn.close()
+
+
+def is_operator(guild_id, user_id):
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    cur = conn.cursor()
+
+    cur.execute("""
+    SELECT 1 FROM operators WHERE guild_id=? AND user_id=?
+    """, (guild_id, user_id))
+
+    result = cur.fetchone()
+    conn.close()
+
+    return result is not None
+
+# =========================
 # 抽選
 # =========================
 def pick_winner(entries):
@@ -246,7 +294,7 @@ def create_pie_chart(entries, guild):
             w = bbox[2] - bbox[0]
             h = bbox[3] - bbox[1]
 
-            for dx, dy in [(-2,0),(2,0),(0,-2),(0,2)]:
+            for dx, dy in [(-3,0),(3,0),(0,-3),(0,3),(-2,-2),(2,2),(-2,2),(2,-2)]:
                 draw.text((tx - w/2 + dx, ty - h/2 + dy), text, fill="black", font=FONT)
 
             draw.text((tx - w/2, ty - h/2), text, fill="white", font=FONT)
@@ -307,7 +355,7 @@ class DiceView(discord.ui.View):
 
         winner_weight = entry["weight"]
         total = sum(e["weight"] for e in self.entries.values())
-        chance = winner_weight / total * 100100
+        chance = winner_weight / total * 100
 
         try:
             member = await interaction.guild.fetch_member(int(entry["target"]))
@@ -361,6 +409,77 @@ class DiceView(discord.ui.View):
 
         await interaction.followup.send(embed=embed)
 
+# =========================
+# Weight
+# =========================
+class WeightSelect(discord.ui.Select):
+    def __init__(self, entries, guild_id):
+        self.entries = entries
+        self.guild_id = guild_id
+
+        options = []
+        for uid in entries.keys():
+            options.append(
+                discord.SelectOption(
+                    label=str(uid),
+                    value=uid
+                )
+            )
+
+        super().__init__(
+            placeholder="ユーザーを選択",
+            options=options[:25]  # Discord制限
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        uid = self.values[0]
+
+        modal = WeightModal(self.guild_id, uid)
+        await interaction.response.send_modal(modal)
+
+class WeightModal(discord.ui.Modal, title="重み変更"):
+    value = discord.ui.TextInput(label="新しい重み", placeholder="例: 1.5")
+
+    def __init__(self, guild_id, target_id):
+        super().__init__()
+        self.guild_id = guild_id
+        self.target_id = target_id
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            value = float(self.value.value)
+        except:
+            await interaction.response.send_message("数値を入力してください", ephemeral=True)
+            return
+
+        value = max(0.1, min(value, MAX_WEIGHT))
+
+        entries = get_entries(self.guild_id)
+
+        if self.target_id not in entries:
+            await interaction.response.send_message("対象が存在しません", ephemeral=True)
+            return
+
+        # 更新
+        entries[self.target_id]["weight"] = value
+        save_entry(self.guild_id, self.target_id, entries[self.target_id])
+
+        # 確率計算
+        total = sum(e["weight"] for e in entries.values())
+        chance = value / total * 100
+
+        member = interaction.guild.get_member(int(self.target_id))
+        name = member.display_name if member else self.target_id
+
+        await interaction.response.send_message(
+            f"{name} の重みを {value:.2f} に変更\n現在の当選確率: {chance:.1f}%",
+            ephemeral=True
+        )
+
+class WeightView(discord.ui.View):
+    def __init__(self, entries, guild_id):
+        super().__init__(timeout=60)
+        self.add_item(WeightSelect(entries, guild_id))
 # =========================
 # Embed
 # =========================
@@ -486,10 +605,10 @@ async def delete(interaction: discord.Interaction, user: discord.Member = None):
     entries = get_entries(guild_id)
 
     uid = str(interaction.user.id)
-    is_admin = interaction.user.guild_permissions.administrator
+    is_op = is_operator(guild_id, uid)
 
     # 一般ユーザー
-    if not is_admin:
+    if not is_op:
         if uid not in entries:
             await interaction.response.send_message("登録がありません", ephemeral=True)
             return
@@ -626,6 +745,62 @@ async def history(interaction: discord.Interaction):
     embed.set_footer(text="直近10件")
 
     await interaction.followup.send(embed=embed)
+
+#==========================
+#/operator
+#==========================
+@tree.command(name="add_operator", description="Bot管理者を追加")
+@app_commands.describe(user="追加するユーザー")
+async def add_operator_cmd(interaction: discord.Interaction, user: discord.Member):
+
+    # サーバー管理者のみ実行可能
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("管理者のみ実行可能", ephemeral=True)
+        return
+
+    add_operator(str(interaction.guild.id), str(user.id))
+
+    await interaction.response.send_message(f"{user.display_name} をBot管理者に追加しました")
+
+@tree.command(name="delete_operator", description="Bot管理者を削除")
+@app_commands.describe(user="削除するユーザー")
+async def delete_operator_cmd(interaction: discord.Interaction, user: discord.Member):
+
+    # Bot管理者のみ実行可能
+    if not is_operator(str(interaction.guild.id), str(interaction.user.id)):
+        await interaction.response.send_message("Bot管理者のみ実行可能", ephemeral=True)
+        return
+
+    remove_operator(str(interaction.guild.id), str(user.id))
+
+    await interaction.response.send_message(f"{user.display_name} をBot管理者から削除しました")
+
+# =========================
+# /weight
+# =========================
+@tree.command(name="weight", description="重み変更（Bot管理者のみ）")
+async def weight(interaction: discord.Interaction):
+
+    guild_id = str(interaction.guild.id)
+    uid = str(interaction.user.id)
+
+    if not is_operator(guild_id, uid):
+        await interaction.response.send_message("Bot管理者のみ実行可能", ephemeral=True)
+        return
+
+    entries = get_entries(guild_id)
+
+    if not entries:
+        await interaction.response.send_message("登録がありません", ephemeral=True)
+        return
+
+    view = WeightView(entries, guild_id)
+
+    await interaction.response.send_message(
+        "重みを変更するユーザーを選択してください",
+        view=view,
+        ephemeral=True
+    )
 
 # =========================
 # 起動
