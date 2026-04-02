@@ -193,19 +193,23 @@ from PIL import Image, ImageDraw
 import math
 from io import BytesIO
 
+from PIL import Image, ImageDraw
+import math
+from io import BytesIO
+
 def create_pie_chart(entries, guild):
     size = 400
-    scale = 1  # 軽量（2にすると高画質）
+    scale = 1
 
     img = Image.new("RGB", (size * scale, size * scale), "white")
     draw = ImageDraw.Draw(img)
 
     center = size * scale // 2
-    radius = size * scale // 2 - 40
+    radius = size * scale // 2 - 80  # ← 小さめ
 
     total = sum(e["weight"] for e in entries.values())
 
-    start_angle = 0
+    start_angle = -90  # ← 上スタート（重要）
 
     for uid, e in entries.items():
         weight = e["weight"]
@@ -234,52 +238,43 @@ def create_pie_chart(entries, guild):
             outline="white"
         )
 
-        # ===== %表示（中央寄り） =====
+        # ===== 外側ラベル =====
         percent = (weight / total * 100)
 
-        # 小さすぎる割合は表示しない（被り防止）
         if percent >= 5:
             mid_angle = math.radians(start_angle + angle / 2)
 
             text = f"{percent:.1f}%"
 
-            text_x = center + (radius * 0.6) * math.cos(mid_angle)
-            text_y = center + (radius * 0.6) * math.sin(mid_angle)
+            # 線
+            line_start_x = center + (radius * 0.9) * math.cos(mid_angle)
+            line_start_y = center + (radius * 0.9) * math.sin(mid_angle)
+
+            line_end_x = center + (radius * 1.2) * math.cos(mid_angle)
+            line_end_y = center + (radius * 1.2) * math.sin(mid_angle)
+
+            draw.line(
+                [(line_start_x, line_start_y), (line_end_x, line_end_y)],
+                fill="black",
+                width=2
+            )
+
+            # テキスト位置
+            text_x = center + (radius * 1.35) * math.cos(mid_angle)
+            text_y = center + (radius * 1.35) * math.sin(mid_angle)
 
             bbox = draw.textbbox((0, 0), text, font=FONT)
             w = bbox[2] - bbox[0]
             h = bbox[3] - bbox[1]
 
-            # 縁取り（黒）
-            for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
-                draw.text(
-                    (text_x - w/2 + dx, text_y - h/2 + dy),
-                    text,
-                    fill="black",
-                    font=FONT
-                )
-
-            # 本体（白）
             draw.text(
                 (text_x - w/2, text_y - h/2),
                 text,
-                fill="white",
+                fill="black",
                 font=FONT
             )
 
         start_angle += angle
-
-    # ===== ドーナツ =====
-    inner_radius = radius * 0.5
-    draw.ellipse(
-        [
-            center - inner_radius,
-            center - inner_radius,
-            center + inner_radius,
-            center + inner_radius
-        ],
-        fill="white"
-    )
 
     # タイトル
     title = "Participants"
