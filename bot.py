@@ -203,7 +203,8 @@ def create_pie_chart(entries, guild):
         labels=numbered_labels,
         colors=colors,
         autopct='%1.1f%%',
-        startangle=90
+        startangle=90,
+        textprops={'fontsize'}: 8}
     )
 
     ax.axis('equal')
