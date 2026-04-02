@@ -128,7 +128,13 @@ class ConfirmView(discord.ui.View):
     @discord.ui.button(label="上書きする", style=discord.ButtonStyle.green)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         save_entry(self.guild_id, self.uid, self.entry)
-        embed = create_role_embed("✅上書きしました", self.entry["role_name"], self.entry["color"])
+        member = interaction.guild.get_member(int(self.entry["target"]))
+        embed = create_role_embed(
+            "✅上書きしました",
+            self.entry["role_name"],
+            self.entry["color"],
+            member
+        )
         await interaction.response.edit_message(embed=embed, view=None)
 
     @discord.ui.button(label="キャンセル", style=discord.ButtonStyle.red)
@@ -362,7 +368,12 @@ async def dice(interaction: discord.Interaction):
 
         add_history(guild_id, winner_id, entry["role_name"])
 
-        embed = create_role_embed("🎲当選！", entry["role_name"], entry["color"], member.display_name)
+        embed = create_role_embed(
+            "🎲当選！",
+            entry["role_name"],
+            entry["color"],
+            member
+        )
         await interaction.followup.send(embed=embed)
 
     finally:
