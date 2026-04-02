@@ -9,10 +9,14 @@ from io import BytesIO
 import asyncio
 from PIL import ImageFont
 
+FONT_PATH = os.path.join(os.path.dirname(__file__), "NotoSansJP-VariableFont_wght.ttf")
+
 try:
-    FONT = ImageFont.truetype("NotoSansJP-Regular.otf", 60)
-    SMALL_FONT = ImageFont.truetype("NotoSansJP-Regular.otf", 48)
-except:
+    FONT = ImageFont.truetype(FONT_PATH, 60)
+    SMALL_FONT = ImageFont.truetype(FONT_PATH, 48)
+    print("フォント読み込み成功")
+except Exception as e:
+    print("フォント読み込み失敗:", e)
     FONT = ImageFont.load_default()
     SMALL_FONT = FONT
 
