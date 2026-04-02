@@ -344,8 +344,15 @@ async def history(interaction: discord.Interaction):
 # =========================
 # 起動
 # =========================
+import shutil
+import os
+
 @client.event
 async def on_ready():
+    if not os.path.exists("/data/data.db"):
+        shutil.copy("data.db", "/data/data.db")
+        print("DBコピー完了")
+
     init_db()
     await tree.sync()
     print("起動完了")
