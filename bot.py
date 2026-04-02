@@ -204,7 +204,7 @@ def create_pie_chart(entries, guild):
         colors=colors,
         autopct='%1.1f%%',
         startangle=90,
-        textprops={'fontsize'}: 8}
+        textprops={'fontsize': 8}
     )
 
     ax.axis('equal')
