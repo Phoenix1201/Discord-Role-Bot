@@ -135,11 +135,11 @@ class ConfirmView(discord.ui.View):
             self.entry["color"],
             member
         )
-        await interaction.response.edit_message(embed=embed, view=None)
+        await interaction.edit_original_response(embed=embed, view=None)
 
     @discord.ui.button(label="キャンセル", style=discord.ButtonStyle.red)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(content="キャンセルしました", embed=None, view=None)
+        await interaction.edit_original_response(content="キャンセルしました", embed=None, view=None)
 
 # =========================
 # 抽選
