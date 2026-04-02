@@ -8,6 +8,7 @@ import shutil
 import matplotlib.pyplot as plt
 from io import BytesIO
 import asyncio
+import japanize_matplotlib
 
 DB_PATH = "/data/data.db"
 MAX_WEIGHT = 5
@@ -187,7 +188,7 @@ def create_pie_chart(entries, guild):
         member = guild.get_member(int(uid))
         name = member.display_name if member else uid
 
-        labels.append(name)
+        labels.append(name[:10])
         sizes.append(e["weight"])
 
         # 色処理
@@ -234,7 +235,7 @@ class DiceView(discord.ui.View):
         self.used = False  # ← 二重押し防止
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return True  # 誰でも押せる（制限したいなら変更）
+        return True  # 誰でも押せる
 
     @discord.ui.button(label="🎲 抽選する", style=discord.ButtonStyle.green)
     async def roll(self, interaction: discord.Interaction, button: discord.ui.Button):
