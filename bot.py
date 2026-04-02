@@ -153,10 +153,12 @@ class ConfirmView(discord.ui.View):
             self.entry["color"],
             member
         )
+        self.stop()
         await interaction.edit_original_response(embed=embed, view=None)
 
     @discord.ui.button(label="キャンセル", style=discord.ButtonStyle.red)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.stop()
         await interaction.response.edit_message(
             content="キャンセルしました",
             embed=None,
@@ -444,7 +446,11 @@ async def history(interaction: discord.Interaction):
         name = member.display_name if member else uid
         desc += f"{i}. {name} → {role}\n"
 
-    embed = discord.Embed(title="履歴", description=desc or "履歴なし")
+    embed = discord.Embed(
+        title="履歴",
+        description=desc or "履歴なし"
+        color = discord.Color.blurple()
+    )
     embed.set_footer(text="直近10件")
 
     await interaction.followup.send(embed=embed)
