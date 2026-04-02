@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import random
 import sqlite3
 import shutil
-import matplot.font_manager as fm
+import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
 from io import BytesIO
 import asyncio
@@ -217,12 +217,13 @@ def create_pie_chart(entries, guild):
         labels,
         title="参加者",
         loc="center left",
-        bbox_to_anchor=(1, 0.5)
-        prop=font_prop
+        bbox_to_anchor=(1, 0.5),
+        prop=font_prop if font_prop else None
     )
 
     for autotext in autotexts:
-        autotext.set_fontproperties(font_prop)
+        if font_prop:
+            autotext.set_fontproperties(font_prop)
 
     buf = BytesIO()
     plt.savefig(buf, format='png', bbox_inches='tight')
@@ -353,7 +354,11 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 font_path = "./fonts/NotoSansJP-VariableFont_wght.ttf"
-font_prop = fm.FontProperties(fname=font_path)
+if os.path.exists(font_path):
+    font_prop = fm.FontProperties(fname=font_path)
+    plt.rcParams['font.family'] = font_prop.get_name()
+else:
+    font_prop = None
 
 plt.rcParams['font.family'] = font_prop.get_name()
 
