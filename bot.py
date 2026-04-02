@@ -180,18 +180,14 @@ def pick_winner(entries):
     return random.choices(users, weights=weights, k=1)[0]
 
 def create_pie_chart(entries, guild):
-    labels = []
     sizes = []
     colors = []
+    numbered_labels = []
 
-    for uid, e in entries.items():
-        member = guild.get_member(int(uid))
-        name = member.display_name if member else uid
-
-        labels.append(name[:10])
+    for i, (uid, e) in enumerate(entries.items(), start=1):
+        numbered_labels.append(str(i))
         sizes.append(e["weight"])
 
-        # 色処理
         if e["color"]:
             try:
                 colors.append(f"#{e['color']}")
@@ -204,29 +200,19 @@ def create_pie_chart(entries, guild):
 
     wedges, texts, autotexts = ax.pie(
         sizes,
-        labels=None,
+        labels=numbered_labels,
         colors=colors,
         autopct='%1.1f%%',
         startangle=90
     )
 
     ax.axis('equal')
+    if font_prop:
+        ax.set_title("参加者", fontproperties=font_prop)
+    else:
+        ax.set_title("Lottery")
 
-    ax.legend(
-        wedges,
-        labels,
-        loc="center left",
-        bbox_to_anchor=(1, 0.5),
-        prop=font_prop if font_prop else None
-    )
-    ax.set_title("参加者", fontproperties=font_prop)
-    for autotext in autotexts:
-        if font_prop:
-            autotext.set_fontproperties(font_prop)
-
-    for text in texts:
-        if font_prop:
-            text.set_fontproperties(font_prop)
+    plt.tight_layout()
 
     buf = BytesIO()
     plt.savefig(buf, format='png', bbox_inches='tight')
@@ -359,10 +345,12 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 font_path = "./fonts/NotoSansJP-Regular.ttf"
 if os.path.exists(font_path):
     font_prop = fm.FontProperties(fname=font_path)
+    try:
+        plt.rcParams['font.family'] = font_prop.get_name()
+    except:
+        pass
 else:
     font_prop = None
-
-plt.rcParams['font.family'] = font_prop.get_name()
 
 intents = discord.Intents.default()
 intents.members = True
@@ -528,8 +516,14 @@ async def dice(interaction: discord.Interaction):
         )
         embed.set_image(url="attachment://chart.png")
 
+        desc = ""
+        for i, (uid, entry) in enumerate(entries.items(), start=1):
+            member = interaction.guild.get_member(int(uid))
+            name = member.display_name if member else uid
+            desc += f"{i}. {name} → {entry['role_name']}\n"
+        
+        embed.add_field(name="参加者一覧", value=desc or "なし", inline=False)
         view = DiceView(entries, gid)
-
         await interaction.followup.send(embed=embed, file=file, view=view)
 
     finally:
