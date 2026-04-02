@@ -7,6 +7,14 @@ import sqlite3
 import shutil
 from io import BytesIO
 import asyncio
+from PIL import ImageFont
+
+try:
+    FONT = ImageFont.truetype("NotoSansJP-Regular.otf", 24)
+    SMALL_FONT = ImageFont.truetype("NotoSansJP-Regular.otf", 18)
+except:
+    FONT = ImageFont.load_default()
+    SMALL_FONT = FONT
 
 DB_PATH = "/data/data.db"
 MAX_WEIGHT = 5
@@ -177,46 +185,113 @@ def pick_winner(entries):
         return None
     return random.choices(users, weights=weights, k=1)[0]
 
+from PIL import Image, ImageDraw
+import math
+from io import BytesIO
+
 def create_pie_chart(entries, guild):
-    import matplotlib.pyplot as plt
-    
-    sizes = []
-    colors = []
-    numbered_labels = []
+    size = 400
+    scale = 1  # ← 軽量設定（2にすると高画質）
 
-    for i, (uid, e) in enumerate(entries.items(), start=1):
-        numbered_labels.append(str(i))
-        sizes.append(e["weight"])
+    img = Image.new("RGB", (size * scale, size * scale), "white")
+    draw = ImageDraw.Draw(img)
 
+    center = size * scale // 2
+    radius = size * scale // 2 - 40
+
+    total = sum(e["weight"] for e in entries.values())
+
+    start_angle = 0
+
+    for i, (uid, e) in enumerate(entries.items()):
+        weight = e["weight"]
+        angle = 360 * (weight / total)
+
+        # 色
         if e["color"]:
             try:
-                colors.append(f"#{e['color']}")
+                color = f"#{e['color']}"
             except:
-                colors.append("#5865F2")
+                color = "#5865F2"
         else:
-            colors.append("#5865F2")
+            color = "#5865F2"
 
-    fig, ax = plt.subplots(figsize=(2, 2))
+        # 円
+        draw.pieslice(
+            [
+                center - radius,
+                center - radius,
+                center + radius,
+                center + radius
+            ],
+            start=start_angle,
+            end=start_angle + angle,
+            fill=color,
+            outline="white"
+        )
 
-    wedges, texts, autotexts = ax.pie(
-        sizes,
-        labels=numbered_labels,
-        colors=colors,
-        autopct='%1.1f%%',
-        startangle=90,
-        textprops={'fontsize': 8}
+        # 中央角度
+        mid_angle = math.radians(start_angle + angle / 2)
+
+        # ===== ラベル =====
+        percent = f"{(weight / total * 100):.1f}%"
+
+        member = guild.get_member(int(uid))
+        name = member.display_name if member else str(i+1)
+
+        label = f"{name} ({percent})"
+
+        text_x = center + (radius * 1.3) * math.cos(mid_angle)
+        text_y = center + (radius * 1.3) * math.sin(mid_angle)
+
+        bbox = draw.textbbox((0, 0), label, font=SMALL_FONT)
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+
+        draw.text(
+            (text_x - w/2, text_y - h/2),
+            label,
+            fill="black",
+            font=SMALL_FONT
+        )
+
+        # 線
+        line_start_x = center + (radius * 0.9) * math.cos(mid_angle)
+        line_start_y = center + (radius * 0.9) * math.sin(mid_angle)
+
+        draw.line(
+            [(line_start_x, line_start_y), (text_x, text_y)],
+            fill="black",
+            width=2
+        )
+
+        start_angle += angle
+
+    # ドーナツ
+    inner_radius = radius * 0.5
+    draw.ellipse(
+        [
+            center - inner_radius,
+            center - inner_radius,
+            center + inner_radius,
+            center + inner_radius
+        ],
+        fill="white"
     )
 
-    ax.axis('equal')
-    ax.set_title("Participants")
-
-    plt.tight_layout()
+    # タイトル
+    title = "Participants"
+    bbox = draw.textbbox((0, 0), title, font=FONT)
+    draw.text(
+        (center - (bbox[2] / 2), 10),
+        title,
+        fill="black",
+        font=FONT
+    )
 
     buf = BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight')
+    img.save(buf, format="PNG")
     buf.seek(0)
-    plt.close(fig)
-
     return buf
 
 class DiceView(discord.ui.View):
