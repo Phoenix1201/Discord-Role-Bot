@@ -375,7 +375,7 @@ class DiceView(discord.ui.View):
         if self.used:
             await interaction.response.send_message("もう抽選済みです", ephemeral=True)
             return
-
+    
         self.used = True
         button.disabled = True
 
@@ -383,16 +383,17 @@ class DiceView(discord.ui.View):
         await interaction.edit_original_response(view=self)
 
         try:
+            # ① 1個だけメッセージ送る
             msg = await interaction.followup.send(content="🎲 抽選中...")
 
-            # 🎲 演出
+            # 演出
             for i in range(3):
                 await msg.edit(content="🎲 抽選中" + "." * i)
                 await asyncio.sleep(0.5)
 
             winner_id = pick_winner(self.entries)
             if not winner_id:
-                await interaction.followup.send("抽選できませんでした")
+                await msg.edit(content="抽選できませんでした")
                 return
 
             entry = self.entries[winner_id]
@@ -401,12 +402,11 @@ class DiceView(discord.ui.View):
             total = sum(e["weight"] for e in self.entries.values()) or 1
             chance = winner_weight / total * 100
 
-            try:
-                member = interaction.guild.get_member(int(entry["target"])) \
-                    or await interaction.guild.fetch_member(int(entry["target"]))
-            except:
-                await interaction.followup.send("⚠️ ユーザー取得に失敗しました")
-                return
+            member = interaction.guild.get_member(int(entry["target"])) \
+                or await interaction.guild.fetch_member(int(entry["target"]))
+                except:
+                    await interaction.followup.send("⚠️ ユーザー取得に失敗しました")
+                    return
 
             # ロール削除
             for uid, e in self.entries.items():
@@ -457,15 +457,19 @@ class DiceView(discord.ui.View):
                 entry["color"],
                 member
             )
-            embed.description += f"\n当選確率: {chance:.1f}%"
+            embed.description = (embed.description or "") + f"\n当選確率: {chance:.1f}%"
 
-            await msg.edit(content="")
-            await interaction.followup.send(embed=embed)
-            dice_running[self.guild_id] = False
+        # ② 同じメッセージを結果に変更
+        await msg.edit(content=None, embed=embed)
 
         except Exception as e:
             print("dice error:", e)
-            await interaction.followup.send("エラーが発生しました")
+            try:
+                await msg.edit(content="エラーが発生しました")
+            except:
+            pass
+
+        finally:
             dice_running[self.guild_id] = False
                 
 # =========================
