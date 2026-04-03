@@ -402,11 +402,12 @@ class DiceView(discord.ui.View):
             total = sum(e["weight"] for e in self.entries.values()) or 1
             chance = winner_weight / total * 100
 
-            member = interaction.guild.get_member(int(entry["target"])) \
-                or await interaction.guild.fetch_member(int(entry["target"]))
-                except:
-                    await interaction.followup.send("⚠️ ユーザー取得に失敗しました")
-                    return
+            try:
+                member = interaction.guild.get_member(int(entry["target"])) \
+                    or await interaction.guild.fetch_member(int(entry["target"]))
+            except:
+                await interaction.followup.send("⚠️ ユーザー取得に失敗しました")
+                return
 
             # ロール削除
             for uid, e in self.entries.items():
