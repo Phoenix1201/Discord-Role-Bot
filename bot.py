@@ -461,8 +461,8 @@ class DiceView(discord.ui.View):
             embed.description = (embed.description or "") + f"\n当選確率: {chance:.1f}%"
 
         # ② 同じメッセージを結果に変更
-        await msg.edit(content=None, embed=embed)
-
+        try:
+            await msg.edit(content=None, embed=embed)
         except Exception as e:
             print("dice error:", e)
             try:
