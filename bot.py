@@ -269,12 +269,12 @@ import math
 from io import BytesIO
 
 def create_pie_chart(entries):
-    size = 350
+    size = 260
     img = Image.new("RGB", (size, size), "white")
     draw = ImageDraw.Draw(img)
 
     center = size // 2
-    radius = 120
+    radius = 95
 
     total = sum(e["weight"] for e in entries.values())
     if total <= 0:
@@ -318,10 +318,12 @@ def create_pie_chart(entries):
             w = bbox[2] - bbox[0]
             h = bbox[3] - bbox[1]
 
-            for dx, dy in [(-2,0),(2,0),(0,-2),(0,2)]:
-                draw.text((tx - w/2 + dx, ty - h/2 + dy), text, fill="black", font=FONT)
-
-            draw.text((tx - w/2, ty - h/2), text, fill="white", font=FONT)
+            draw.text(
+                (tx - w/2, ty - h/2),
+                text,
+                fill="black",
+                font=FONT
+            )
 
         # ===== 外側：番号だけ =====
         label = str(i)
@@ -343,7 +345,7 @@ def create_pie_chart(entries):
         start_angle += angle
 
     # タイトル
-    draw.text((20, 10), "Participants", fill="black", font=FONT)
+    draw.text((10, 5), "Participants", fill="black", font=SMALL_FONT)
 
     buf = BytesIO()
     img.save(buf, format="PNG")
@@ -785,7 +787,13 @@ async def dice(interaction: discord.Interaction):
 async def list_roles(interaction: discord.Interaction):
     await interaction.response.defer()
 
-    entries = get_entries(str(interaction.guild.id))
+    guild_id = str(interaction.guild.id)
+
+    entries = get_entries(guild_id)
+    rows = get_history(guild_id)
+
+    # ⭐ 最新当選者
+    last_winner = rows[0][0] if rows else None
 
     embed = discord.Embed(title="📋一覧", color=discord.Color.blurple())
 
@@ -793,6 +801,10 @@ async def list_roles(interaction: discord.Interaction):
         member = interaction.guild.get_member(int(uid)) \
             or await interaction.guild.fetch_member(int(uid))
         name = member.display_name if member else uid
+
+        # ⭐ 強調
+        if uid == last_winner:
+            name = f"🎉 **{name}**"
 
         embed.add_field(
             name=name,
@@ -803,30 +815,27 @@ async def list_roles(interaction: discord.Interaction):
     embed.set_footer(text=f"登録人数: {len(entries)}人" if entries else "登録なし")
 
     await interaction.followup.send(embed=embed)
-
 # =========================
 # /history
 # =========================
 @tree.command(name="history", description="当選履歴")
 async def history(interaction: discord.Interaction):
     await interaction.response.defer()
-
     rows = get_history(str(interaction.guild.id))
-
     desc = ""
     for i, (uid, role) in enumerate(rows, 1):
         member = interaction.guild.get_member(int(uid)) \
             or await interaction.guild.fetch_member(int(uid))
         name = member.display_name if member else uid
         desc += f"{i}. {name} → {role}\n"
-
+    
     embed = discord.Embed(
         title="履歴",
         description=desc or "履歴なし",
         color = discord.Color.blurple()
     )
     embed.set_footer(text="直近10件")
-
+    
     await interaction.followup.send(embed=embed)
 
 #==========================
