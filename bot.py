@@ -894,6 +894,45 @@ async def weight(interaction: discord.Interaction):
         ephemeral=True
     )
 
+
+@tree.command(name="add", description="強制登録（管理者用）")
+@app_commands.describe(
+    user_id="登録するユーザーID",
+    role_name="ロール名",
+    color="カラーコード（例: b837ff）",
+    target_id="対象ユーザーID"
+)
+async def add_cmd(
+    interaction: discord.Interaction,
+    user_id: str,
+    role_name: str,
+    color: str,
+    target_id: str
+):
+    guild_id = str(interaction.guild.id)
+
+    # Bot管理者チェック
+    if not is_operator(guild_id, str(interaction.user.id)):
+        await interaction.response.send_message("Bot管理者のみ使用可能", ephemeral=True)
+        return
+
+    entries = get_entries(guild_id)
+
+    entry = {
+        "role_name": role_name,
+        "color": color.replace("#", ""),
+        "target": target_id,
+        "weight": 1,
+        "role_id": None
+    }
+
+    save_entry(guild_id, user_id, entry)
+
+    await interaction.response.send_message(
+        f"✅ {user_id} を強制登録しました",
+        ephemeral=True
+    )
+
 # =========================
 # 起動
 # =========================
