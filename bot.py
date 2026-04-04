@@ -575,7 +575,7 @@ class DeleteSelect(discord.ui.Select):
         options = []
 
         for uid, e in entries.items():
-            member = guild.get_member(int(uid)) \
+            member = guild.get_member(int(uid))
             name = member.display_name if member else uid
 
             options.append(
