@@ -581,7 +581,7 @@ class DeleteSelect(discord.ui.Select):
 
             options.append(
                 discord.SelectOption(
-                    label=f"{name} ({e['role_name']})"
+                    label=f"{name} ({e['role_name']})",
                     value=uid
                 )
             )
