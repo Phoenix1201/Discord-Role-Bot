@@ -561,6 +561,70 @@ class WeightView(discord.ui.View):
     def __init__(self, entries, guild_id, guild):
         super().__init__(timeout=60)
         self.add_item(WeightSelect(entries, guild_id, guild))
+
+# =========================
+# delete
+#==========================
+class DeleteSelect(discord.ui.Select):
+    def __init__(self, entries, guild_id, guild):
+        self.entries = entries
+        self.guild_id = guild_id
+        self.guild = guild
+        self.used = False
+
+        options = []
+
+        for uid, e in entries.items():
+            member = guild.get_member(int(uid)) \
+                or await self.guild.fetch_member(int(uid))
+            name = member.display_name if member else uid
+
+            options.append(
+                discord.SelectOption(
+                    label=f"{name} ({e['role_name']})"
+                    value=uid
+                )
+            )
+
+        super().__init__(
+            placeholder="削除するユーザーを選択",
+            options=options[:25]  # 上限
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        uid = self.values[0]
+
+        entry = self.entries.get(uid)
+        if not entry:
+            await interaction.response.send_message("登録なし", ephemeral=True)
+            return
+
+        self.used = True  # ←追加
+
+        # ロール削除
+        if entry.get("role_id"):
+            role = interaction.guild.get_role(entry["role_id"])
+            if role:
+                try:
+                    await role.delete()
+                except:
+                    pass
+
+        delete_entry(self.guild_id, uid)
+
+        member = interaction.guild.get_member(int(uid))
+        name = member.display_name if member else uid
+
+        await interaction.response.edit_message(
+            f"{name} の登録を削除しました",
+            ephemeral=True
+        )
+
+class DeleteView(discord.ui.View):
+    def __init__(self, entries, guild_id, guild):
+        super().__init__(timeout=60)
+        self.add_item(DeleteSelect(entries, guild_id, guild))
+
 # =========================
 # Embed
 # =========================
@@ -676,15 +740,17 @@ async def role(interaction: discord.Interaction, name: str, color: str = None, u
 # /delete
 # =========================
 @tree.command(name="delete", description="登録削除")
-async def delete(interaction: discord.Interaction, user: discord.Member = None):
+async def delete(interaction: discord.Interaction):
 
     guild_id = str(interaction.guild.id)
-    entries = get_entries(guild_id)
-
     uid = str(interaction.user.id)
+
+    entries = get_entries(guild_id)
     is_op = is_operator(guild_id, uid)
 
+    # =========================
     # 一般ユーザー
+    # =========================
     if not is_op:
         if uid not in entries:
             await interaction.response.send_message("登録がありません", ephemeral=True)
@@ -697,36 +763,28 @@ async def delete(interaction: discord.Interaction, user: discord.Member = None):
             if role:
                 try:
                     await role.delete()
-                except Exception as e:
-                    print("role delete error:", e)
+                except:
+                    pass
 
         delete_entry(guild_id, uid)
-        await interaction.response.send_message("登録を解除しました", ephemeral=True)
+
+        await interaction.response.send_message("自分の登録を削除しました", ephemeral=True)
         return
 
-    # 管理者
-    if not user:
-        await interaction.response.send_message("ユーザーを指定して下さい", ephemeral=True)
+    # =========================
+    # 管理者（プルダウン）
+    # =========================
+    if not entries:
+        await interaction.response.send_message("登録がありません", ephemeral=True)
         return
 
-    target_id = str(user.id)
+    view = DeleteView(entries, guild_id, interaction.guild)
 
-    if target_id not in entries:
-        await interaction.response.send_message("登録なし", ephemeral=True)
-        return
-
-    entry = entries[target_id]
-
-    if entry.get("role_id"):
-        role = interaction.guild.get_role(entry["role_id"])
-        if role:
-            try:
-                await role.delete()
-            except:
-                pass
-
-    delete_entry(guild_id, target_id)
-    await interaction.response.send_message(f"{user.display_name} の登録を解除しました")
+    await interaction.response.send_message(
+        "削除するユーザーを選択してください",
+        view=view,
+        ephemeral=True
+    )
 
 # =========================
 # /dice
@@ -891,45 +949,6 @@ async def weight(interaction: discord.Interaction):
     await interaction.response.send_message(
         "重みを変更するユーザーを選択してください",
         view=view,
-        ephemeral=True
-    )
-
-
-@tree.command(name="add", description="強制登録（管理者用）")
-@app_commands.describe(
-    user_id="登録するユーザーID",
-    role_name="ロール名",
-    color="カラーコード（例: b837ff）",
-    target_id="対象ユーザーID"
-)
-async def add_cmd(
-    interaction: discord.Interaction,
-    user_id: str,
-    role_name: str,
-    color: str,
-    target_id: str
-):
-    guild_id = str(interaction.guild.id)
-
-    # Bot管理者チェック
-    if not is_operator(guild_id, str(interaction.user.id)):
-        await interaction.response.send_message("Bot管理者のみ使用可能", ephemeral=True)
-        return
-
-    entries = get_entries(guild_id)
-
-    entry = {
-        "role_name": role_name,
-        "color": color.replace("#", ""),
-        "target": target_id,
-        "weight": 1,
-        "role_id": None
-    }
-
-    save_entry(guild_id, user_id, entry)
-
-    await interaction.response.send_message(
-        f"✅ {user_id} を強制登録しました",
         ephemeral=True
     )
 
