@@ -177,6 +177,8 @@ class ConfirmView(discord.ui.View):
                 view=self
             )
 
+        self.stop()
+
     @discord.ui.button(label="上書きする", style=discord.ButtonStyle.green)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
@@ -233,7 +235,6 @@ def remove_operator(guild_id, user_id):
     conn.commit()
     conn.close()
 
-
 def is_operator(guild_id, user_id):
     conn = get_conn()
     cur = conn.cursor()
@@ -247,57 +248,73 @@ def is_operator(guild_id, user_id):
 
     return result is not None
 
+def get_operators(guild_id):
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("SELECT user_id FROM operators WHERE guild_id=?", (guild_id,))
+    rows = cur.fetchall()
+    conn.close()
+
+    return [r[0] for r in rows]
+
+def create_operator_embed(guild, guild_id):
+    ops = get_operators(guild_id)
+
+    desc = ""
+    for uid in ops:
+        member = guild.get_member(int(uid))
+        name = member.display_name if member else uid
+        desc += f"・{name}\n"
+
+    return discord.Embed(
+        title="👑 Bot管理者一覧",
+        description=desc or "なし",
+        color=discord.Color.gold()
+    )
+
 class AdminPanelView(discord.ui.View):
-    def __init__(self, guild_id, guild):
+    def __init__(self, guild_id, guild, is_full_access):
         super().__init__(timeout=60)
         self.guild_id = guild_id
         self.guild = guild
 
+        if not is_full_access:
+            for item in self.children:
+                if item.label != "👑 管理者編集":
+                    item.disabled = True
+
     @discord.ui.button(label="🗑 削除", style=discord.ButtonStyle.red)
     async def delete_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-
         button.disabled = True
         await interaction.response.edit_message(view=self)
-        
-        entries = get_entries(self.guild_id)
-        view = DeleteView(entries, self.guild_id, self.guild)
 
-        await interaction.response.send_message(
-            "削除するユーザーを選択してください",
-            view=view,
-            ephemeral=True
-        )
+        view = DeleteView(get_entries(self.guild_id), self.guild_id, self.guild)
+        await interaction.followup.send("削除対象を選択", view=view, ephemeral=True)
 
     @discord.ui.button(label="⚖ 重み", style=discord.ButtonStyle.blurple)
     async def weight_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-
         button.disabled = True
         await interaction.response.edit_message(view=self)
-        
-        entries = get_entries(self.guild_id)
-        view = WeightView(entries, self.guild_id, self.guild)
 
-        await interaction.response.send_message(
-            "重みを変更するユーザーを選択してください",
-            view=view,
-            ephemeral=True
-        )
+        view = WeightView(get_entries(self.guild_id), self.guild_id, self.guild)
+        await interaction.followup.send("重み変更", view=view, ephemeral=True)
 
     @discord.ui.button(label="🔁 ON/OFF", style=discord.ButtonStyle.green)
     async def toggle_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-
         button.disabled = True
         await interaction.response.edit_message(view=self)
+
+        view = ToggleView(get_entries(self.guild_id), self.guild_id, self.guild)
+        await interaction.followup.send("ON/OFF変更", view=view, ephemeral=True)
+
+    @discord.ui.button(label="👑 管理者編集", style=discord.ButtonStyle.gray)
+    async def operator_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = create_operator_embed(self.guild, self.guild_id)
+        view = OperatorManageView(self.guild_id)
+
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         
-        entries = get_entries(self.guild_id)
-        view = ToggleView(entries, self.guild_id, self.guild)
-
-        await interaction.response.send_message(
-            "ON/OFFを切り替えるユーザーを選択してください",
-            view=view,
-            ephemeral=True
-        )
-
 class ToggleSelect(discord.ui.Select):
     def __init__(self, entries, guild_id, guild):
         self.entries = entries
@@ -362,6 +379,81 @@ class ToggleView(discord.ui.View):
         super().__init__(timeout=60)
         self.add_item(ToggleSelect(entries, guild_id, guild))
 
+class OperatorManageView(discord.ui.View):
+    def __init__(self, guild_id):
+        super().__init__(timeout=60)
+        self.guild_id = guild_id
+
+    @discord.ui.button(label="追加", style=discord.ButtonStyle.green)
+    async def add_op(self, interaction: discord.Interaction, button: discord.ui.Button):
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+
+        await interaction.followup.send(
+            "追加するユーザーを選択",
+            view=OperatorAddSelectView(self.guild_id),
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="解除", style=discord.ButtonStyle.red)
+    async def remove_op(self, interaction: discord.Interaction, button: discord.ui.Button):
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+
+        await interaction.followup.send(
+            "解除するユーザーを選択",
+            view=OperatorRemoveSelectView(self.guild_id),
+            ephemeral=True
+        )
+
+class OperatorAddSelect(discord.ui.UserSelect):
+    def __init__(self, guild_id):
+        super().__init__(
+            placeholder="追加するユーザーを選択",
+            min_values=1,
+            max_values=1
+        )
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        user = self.values[0]
+
+        add_operator(self.guild_id, str(user.id))
+
+        await interaction.response.edit_message(
+            content=f"{user.display_name} を管理者に追加しました",
+            view=None
+        )
+
+class OperatorAddSelectView(discord.ui.View):
+    def __init__(self, guild_id):
+        super().__init__(timeout=60)
+        self.add_item(OperatorAddSelect(guild_id))
+
+class OperatorRemoveSelect(discord.ui.UserSelect):
+    def __init__(self, guild_id):
+        super().__init__(
+            placeholder="解除するユーザーを選択",
+            min_values=1,
+            max_values=1
+        )
+        self.guild_id = guild_id
+
+    async def callback(self, interaction: discord.Interaction):
+        user = self.values[0]
+
+        remove_operator(self.guild_id, str(user.id))
+
+        await interaction.response.edit_message(
+            content=f"{user.display_name} の管理者権限を解除しました",
+            view=None
+        )
+
+class OperatorRemoveSelectView(discord.ui.View):
+    def __init__(self, guild_id):
+        super().__init__(timeout=60)
+        self.add_item(OperatorRemoveSelect(guild_id))
+        
 # =========================
 # list
 # =========================
@@ -411,19 +503,18 @@ class ConfirmDeleteView(discord.ui.View):
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer()
 
-        # ロール削除
+        # ロール削除（安全チェック強化）
         if self.entry.get("role_id"):
             role = interaction.guild.get_role(self.entry["role_id"])
-            if role:
+            if role and role < interaction.guild.me.top_role and not role.managed:
                 try:
                     await role.delete()
-                except:
-                    pass
+                except Exception as e:
+                    print("role delete error:", e)
 
         delete_entry(self.guild_id, self.uid)
 
         self.stop()
-        button.disabled = True
         await interaction.edit_original_response(
             content="✅ 削除しました",
             embed=None,
@@ -794,7 +885,6 @@ class DeleteSelect(discord.ui.Select):
         self.entries = entries
         self.guild_id = guild_id
         self.guild = guild
-        self.used = False
 
         options = []
 
@@ -811,7 +901,7 @@ class DeleteSelect(discord.ui.Select):
 
         super().__init__(
             placeholder="削除するユーザーを選択",
-            options=options[:25]  # 上限
+            options=options[:25]
         )
 
     async def callback(self, interaction: discord.Interaction):
@@ -822,37 +912,27 @@ class DeleteSelect(discord.ui.Select):
             await interaction.response.send_message("登録なし", ephemeral=True)
             return
 
-        self.used = True  # ←追加
-
-        # ロール削除
-        if entry.get("role_id"):
-            role = interaction.guild.get_role(entry["role_id"])
-            if role:
-                try:
-                    await role.delete()
-                except:
-                    pass
+        member = interaction.guild.get_member(int(uid))
+        if not member:
+            try:
+                member = await interaction.guild.fetch_member(int(uid))
+            except:
+                member = None
 
         view = ConfirmDeleteView(self.guild_id, uid, entry)
 
         await interaction.response.send_message(
             embed=create_role_embed(
-            "⚠️ この登録を削除しますか？",
-            entry["role_name"],
-            entry["color"],
-            member
-        ),
-        view=view,
-        ephemeral=True
-    )
-
-        member = interaction.guild.get_member(int(uid))
-        name = member.display_name if member else uid
-
-        await interaction.response.edit_message(
-            f"{name} の登録を削除しました",
+                "⚠️ この登録を削除しますか？",
+                entry["role_name"],
+                entry["color"],
+                member
+            ),
+            view=view,
             ephemeral=True
         )
+
+        view.message = await interaction.original_response()
 
 class DeleteView(discord.ui.View):
     def __init__(self, entries, guild_id, guild):
@@ -1115,7 +1195,11 @@ async def list_roles(interaction: discord.Interaction):
 
     embed.set_footer(text=f"登録人数: {len(entries)}人" if entries else "登録なし")
 
-    await interaction.followup.send(embed=embed)
+    if is_op:
+        view = AdminListView(all_entries, guild_id, interaction.guild)
+        await interaction.followup.send(embed=embed, view=view)
+    else:
+        await interaction.followup.send(embed=embed)
     
 # =========================
 # /history
@@ -1144,23 +1228,23 @@ async def history(interaction: discord.Interaction):
 #/admin
 #==========================
 @tree.command(name="admin", description="管理パネル")
-@operator_only()
 async def admin_panel(interaction: discord.Interaction):
 
     guild_id = str(interaction.guild.id)
-    entries = get_entries(guild_id)
+    uid = str(interaction.user.id)
 
-    if not entries:
-        await interaction.response.send_message("登録がありません", ephemeral=True)
+    is_op = is_operator(guild_id, uid)
+    is_admin = interaction.user.guild_permissions.administrator
+
+    if not (is_op or is_admin):
+        await interaction.response.send_message("権限なし", ephemeral=True)
         return
 
-    embed = discord.Embed(
-        title="⚙️ 管理パネル",
-        description="操作を選択してください",
-        color=discord.Color.blurple()
-    )
+    embed = create_operator_embed(interaction.guild, guild_id)
 
-    view = AdminPanelView(guild_id, interaction.guild)
+    is_full_access = is_op or is_admin
+
+    view = AdminPanelView(guild_id, interaction.guild, is_full_access)
 
     await interaction.response.send_message(
         embed=embed,
