@@ -519,13 +519,14 @@ class AdminListView(discord.ui.View):
             view=view,
             ephemeral=True
         )
-    @discord.ui.button(label="📢 公開する", style=discord.ButtonStyle.green)
+   @discord.ui.button(label="📢 公開する", style=discord.ButtonStyle.green)
     async def publish(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        button.disabled = True
-        await interaction.message.edit(view=self)
+        await interaction.response.defer()  # ★ これ必須
 
-        # 一般ユーザー用リスト生成（OFF除外）
+        button.disabled = True
+
+        # 一般用（ONのみ）
         public_entries = {
             uid: e for uid, e in self.entries.items()
             if e.get("enabled", 1) == 1
@@ -534,9 +535,13 @@ class AdminListView(discord.ui.View):
         embed = discord.Embed(title="📋一覧", color=discord.Color.blurple())
 
         for uid, entry in public_entries.items():
-            member = self.guild.get_member(int(uid)) \
-                or await self.guild.fetch_member(int(uid))
-            name = member.display_name if member else uid
+            try:
+                member = self.guild.get_member(int(uid)) \
+                    or await self.guild.fetch_member(int(uid))
+            except:
+                member = None
+
+            name = member.display_name if member else f"ID:{uid}"
 
             embed.add_field(
                 name=name,
@@ -546,7 +551,7 @@ class AdminListView(discord.ui.View):
 
         embed.set_footer(text=f"登録人数: {len(public_entries)}人" if public_entries else "登録なし")
 
-        # ★ 公開（全体）
+        await interaction.message.edit(view=None)
         await interaction.channel.send(embed=embed)
 
 # =========================
