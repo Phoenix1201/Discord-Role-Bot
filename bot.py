@@ -1115,7 +1115,8 @@ async def list_roles(interaction: discord.Interaction):
 
     embed.set_footer(text=f"登録人数: {len(entries)}人" if entries else "登録なし")
 
-        await interaction.followup.send(embed=embed)
+    await interaction.followup.send(embed=embed)
+    
 # =========================
 # /history
 # =========================
