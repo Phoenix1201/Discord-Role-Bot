@@ -284,16 +284,12 @@ class AdminPanelView(discord.ui.View):
                 if item.label != "👑 管理者編集":
                     item.disabled = True
 
-    @discord.ui.button(label="🗑 削除", style=discord.ButtonStyle.red)
-    async def delete_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
-
-        view = DeleteView(get_entries(self.guild_id), self.guild_id, self.guild)
-        await interaction.followup.send("削除対象を選択", view=view, ephemeral=True)
-
     @discord.ui.button(label="⚖ 重み", style=discord.ButtonStyle.blurple)
     async def weight_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not is_operator(self.guild_id, str(interaction.user.id)):
+            await interaction.response.send_message("Bot管理者のみ操作可能", ephemeral=True)
+            return
+            
         button.disabled = True
         await interaction.response.edit_message(view=self)
 
@@ -302,6 +298,10 @@ class AdminPanelView(discord.ui.View):
 
     @discord.ui.button(label="🔁 ON/OFF", style=discord.ButtonStyle.green)
     async def toggle_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not is_operator(self.guild_id, str(interaction.user.id)):
+            await interaction.response.send_message("Bot管理者のみ操作可能", ephemeral=True)
+            return
+            
         button.disabled = True
         await interaction.response.edit_message(view=self)
 
@@ -310,6 +310,10 @@ class AdminPanelView(discord.ui.View):
 
     @discord.ui.button(label="👑 管理者編集", style=discord.ButtonStyle.gray)
     async def operator_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not is_operator(self.guild_id, str(interaction.user.id)):
+            await interaction.response.send_message("Bot管理者のみ操作可能", ephemeral=True)
+            return
+            
         embed = create_operator_embed(self.guild, self.guild_id)
         view = OperatorManageView(self.guild_id)
 
@@ -1242,7 +1246,7 @@ async def admin_panel(interaction: discord.Interaction):
 
     embed = create_operator_embed(interaction.guild, guild_id)
 
-    is_full_access = is_op or is_admin
+    is_full_access = is_op
 
     view = AdminPanelView(guild_id, interaction.guild, is_full_access)
 
