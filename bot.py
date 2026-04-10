@@ -310,6 +310,27 @@ class ToggleView(discord.ui.View):
     def __init__(self, entries, guild_id, guild):
         super().__init__(timeout=60)
         self.add_item(ToggleSelect(entries, guild_id, guild))
+
+# =========================
+# list
+# =========================
+class AdminListView(discord.ui.View):
+    def __init__(self, entries, guild_id, guild):
+        super().__init__(timeout=60)
+        self.entries = entries
+        self.guild_id = guild_id
+        self.guild = guild
+
+    @discord.ui.button(label="⚙️ 登録管理", style=discord.ButtonStyle.gray)
+    async def manage(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        view = DeleteView(self.entries, self.guild_id, self.guild)
+
+        await interaction.response.send_message(
+            "削除するユーザーを選択してください",
+            view=view,
+            ephemeral=True
+        )
         
 # =========================
 # 抽選
@@ -839,46 +860,25 @@ async def delete(interaction: discord.Interaction):
     uid = str(interaction.user.id)
 
     entries = get_entries(guild_id)
-    is_op = is_operator(guild_id, uid)
 
-    # =========================
-    # 一般ユーザー
-    # =========================
-    if not is_op:
-        if uid not in entries:
-            await interaction.response.send_message("登録がありません", ephemeral=True)
-            return
-
-        entry = entries[uid]
-
-        if entry.get("role_id"):
-            role = interaction.guild.get_role(entry["role_id"])
-            if role:
-                try:
-                    await role.delete()
-                except:
-                    pass
-
-        delete_entry(guild_id, uid)
-
-        await interaction.response.send_message("自分の登録を削除しました", ephemeral=True)
-        return
-
-    # =========================
-    # 管理者（プルダウン）
-    # =========================
-    if not entries:
+    if uid not in entries:
         await interaction.response.send_message("登録がありません", ephemeral=True)
         return
 
-    view = DeleteView(entries, guild_id, interaction.guild)
+    entry = entries[uid]
 
-    await interaction.response.send_message(
-        "削除するユーザーを選択してください",
-        view=view,
-        ephemeral=True
-    )
+    if entry.get("role_id"):
+        role = interaction.guild.get_role(entry["role_id"])
+        if role:
+            try:
+                await role.delete()
+            except:
+                pass
 
+    delete_entry(guild_id, uid)
+
+    await interaction.response.send_message("自分の登録を削除しました", ephemeral=True)
+    
 # =========================
 # /dice
 # =========================
@@ -981,7 +981,11 @@ async def list_roles(interaction: discord.Interaction):
 
     embed.set_footer(text=f"登録人数: {len(entries)}人" if entries else "登録なし")
 
-    await interaction.followup.send(embed=embed)
+    if is_op:
+        view = AdminListView(all_entries, guild_id, interaction.guild)
+        await interaction.followup.send(embed=embed, view=view)
+    else:
+        await interaction.followup.send(embed=embed)
 # =========================
 # /history
 # =========================
