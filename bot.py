@@ -65,7 +65,13 @@ def init_db():
         user_id TEXT,
         PRIMARY KEY (guild_id, user_id)
     )
-""")
+    """)
+    
+    cur.execute("PRAGMA table_info(entries)")
+    columns = [c[1] for c in cur.fetchall()]
+
+    if "enabled" not in columns:
+        cur.execute("ALTER TABLE entries ADD COLUMN enabled INTEGER DEFAULT 1")
 
     conn.commit()
     conn.close()
@@ -88,7 +94,8 @@ def get_entries(guild_id):
             "color": r[3],
             "target": r[4],
             "weight": r[5],
-            "role_id": r[6]
+            "role_id": r[6],
+            "enabled": r[7] if len(r) > 7 else 1
         }
     return data
 
@@ -97,7 +104,7 @@ def save_entry(guild_id, user_id, entry):
     cur = conn.cursor()
 
     cur.execute("""
-    INSERT OR REPLACE INTO entries VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT OR REPLACE INTO entries VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         guild_id,
         user_id,
@@ -105,7 +112,8 @@ def save_entry(guild_id, user_id, entry):
         entry["color"],
         entry["target"],
         entry["weight"],
-        entry.get("role_id")
+        entry.get("role_id"),
+        entry.get("enabled", 1)
     ))
 
     conn.commit()
@@ -239,14 +247,84 @@ def is_operator(guild_id, user_id):
 
     return result is not None
 
+class ToggleSelect(discord.ui.Select):
+    def __init__(self, entries, guild_id, guild):
+        self.entries = entries
+        self.guild_id = guild_id
+        self.guild = guild
+
+        options = []
+
+        # ON → OFFの順に並べる（見やすい）
+        sorted_entries = sorted(
+            entries.items(),
+            key=lambda x: x[1].get("enabled", 1),
+            reverse=True
+        )
+
+        for uid, e in sorted_entries:
+            member = guild.get_member(int(uid))
+            name = member.display_name if member else uid
+
+            enabled = e.get("enabled", 1)
+            status = "🟢ON" if enabled else "🔴OFF"
+
+            label = f"{name} [{status}]"
+
+            options.append(
+                discord.SelectOption(
+                    label=label[:100],
+                    value=uid
+                )
+            )
+
+        super().__init__(
+            placeholder="ON/OFFを切り替えるユーザーを選択",
+            options=options[:25]
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        uid = self.values[0]
+
+        entry = self.entries.get(uid)
+        if not entry:
+            await interaction.response.send_message("対象が存在しません", ephemeral=True)
+            return
+
+        # トグル
+        entry["enabled"] = 0 if entry.get("enabled", 1) == 1 else 1
+        save_entry(self.guild_id, uid, entry)
+
+        member = interaction.guild.get_member(int(uid))
+        name = member.display_name if member else uid
+
+        status = "🟢ON（参加中）" if entry["enabled"] else "🔴OFF（除外中）"
+
+        await interaction.response.edit_message(
+            content=f"{name} を {status} に変更しました",
+            view=None
+        )
+
+
+class ToggleView(discord.ui.View):
+    def __init__(self, entries, guild_id, guild):
+        super().__init__(timeout=60)
+        self.add_item(ToggleSelect(entries, guild_id, guild))
+        
 # =========================
 # 抽選
 # =========================
 def pick_winner(entries):
-    users = list(entries.keys())
-    weights = [entries[u].get("weight", 1) for u in users]
+    enabled_entries = {
+        uid: e for uid, e in entries.items() if e.get("enabled", 1) == 1
+    }
+
+    users = list(enabled_entries.keys())
+    weights = [enabled_entries[u].get("weight", 1) for u in users]
+
     if not users:
         return None
+
     return random.choices(users, weights=weights, k=1)[0]
 
 def normalize_color(code: str) -> int:
@@ -471,6 +549,22 @@ class DiceView(discord.ui.View):
 
         finally:
             dice_running[self.guild_id] = False
+
+# =========================
+# admin
+# =========================
+def operator_only():
+    async def predicate(interaction: discord.Interaction):
+        if not is_operator(str(interaction.guild.id), str(interaction.user.id)):
+            await interaction.response.send_message(
+                "Bot管理者のみ実行可能",
+                ephemeral=True
+            )
+            return False
+        return True
+    return app_commands.check(predicate)
+
+admin = app_commands.Group(name="admin", description="管理者用コマンド")
                 
 # =========================
 # Weight
@@ -801,7 +895,10 @@ async def dice(interaction: discord.Interaction):
     try:
         await interaction.response.defer()
 
-        entries = get_entries(gid)
+        entries = {
+            uid: e for uid, e in get_entries(gid).items()
+            if e.get("enabled", 1) == 1
+        }
 
         if not entries:
             dice_running[gid] = False
@@ -846,7 +943,16 @@ async def list_roles(interaction: discord.Interaction):
 
     guild_id = str(interaction.guild.id)
 
-    entries = get_entries(guild_id)
+    all_entries = get_entries(guild_id)
+    is_op = is_operator(guild_id, str(interaction.user.id))
+
+    if is_op:
+        entries = all_entries  # 管理者 → 全部
+    else:
+        entries = {
+            uid: e for uid, e in all_entries.items()
+            if e.get("enabled", 1) == 1
+        }
     rows = get_history(guild_id)
 
     # ⭐ 最新当選者
@@ -863,6 +969,10 @@ async def list_roles(interaction: discord.Interaction):
         if uid == last_winner:
             name = f"🎉 **{name}**"
 
+        if is_op:
+            status = "🟢ON" if entry.get("enabled", 1) == 1 else "🔴OFF"
+            name = f"{name} [{status}]"
+            
         embed.add_field(
             name=name,
             value=f"{entry['role_name']}\n倍率: {entry['weight']:.1f}",
@@ -896,47 +1006,39 @@ async def history(interaction: discord.Interaction):
     await interaction.followup.send(embed=embed)
 
 #==========================
-#/operator
+#/admin
 #==========================
-@tree.command(name="add_operator", description="Bot管理者を追加")
+@admin.command(name="add_operator", description="Bot管理者追加")
 @app_commands.describe(user="追加するユーザー")
 async def add_operator_cmd(interaction: discord.Interaction, user: discord.Member):
 
-    # サーバー管理者のみ実行可能
+    # サーバー管理者のみ許可
     if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("管理者のみ実行可能", ephemeral=True)
+        await interaction.response.send_message("サーバー管理者のみ実行可能", ephemeral=True)
         return
 
     add_operator(str(interaction.guild.id), str(user.id))
 
-    await interaction.response.send_message(f"{user.display_name} をBot管理者に追加しました")
+    await interaction.response.send_message(
+        f"{user.display_name} をBot管理者に追加しました"
+    )
 
-@tree.command(name="delete_operator", description="Bot管理者を削除")
+@admin.command(name="remove_operator", description="Bot管理者削除")
 @app_commands.describe(user="削除するユーザー")
-async def delete_operator_cmd(interaction: discord.Interaction, user: discord.Member):
-
-    # Bot管理者のみ実行可能
-    if not is_operator(str(interaction.guild.id), str(interaction.user.id)):
-        await interaction.response.send_message("Bot管理者のみ実行可能", ephemeral=True)
-        return
+@operator_only()
+async def remove_operator_cmd(interaction: discord.Interaction, user: discord.Member):
 
     remove_operator(str(interaction.guild.id), str(user.id))
 
-    await interaction.response.send_message(f"{user.display_name} をBot管理者から削除しました")
+    await interaction.response.send_message(
+        f"{user.display_name} をBot管理者から削除しました"
+    )
 
-# =========================
-# /weight
-# =========================
-@tree.command(name="weight", description="重み変更（Bot管理者のみ）")
+@admin.command(name="weight", description="重み変更")
+@operator_only()
 async def weight(interaction: discord.Interaction):
 
     guild_id = str(interaction.guild.id)
-    uid = str(interaction.user.id)
-
-    if not is_operator(guild_id, uid):
-        await interaction.response.send_message("Bot管理者のみ実行可能", ephemeral=True)
-        return
-
     entries = get_entries(guild_id)
 
     if not entries:
@@ -950,6 +1052,27 @@ async def weight(interaction: discord.Interaction):
         view=view,
         ephemeral=True
     )
+
+@admin.command(name="toggle", description="参加ON/OFF切替")
+@operator_only()
+async def toggle(interaction: discord.Interaction):
+
+    guild_id = str(interaction.guild.id)
+    entries = get_entries(guild_id)
+
+    if not entries:
+        await interaction.response.send_message("登録がありません", ephemeral=True)
+        return
+
+    view = ToggleView(entries, guild_id, interaction.guild)
+
+    await interaction.response.send_message(
+        "ON/OFFを切り替えるユーザーを選択してください",
+        view=view,
+        ephemeral=True
+    )
+
+tree.add_command(admin)
 
 # =========================
 # 起動
