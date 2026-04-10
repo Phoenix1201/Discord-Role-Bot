@@ -319,6 +319,9 @@ class AdminPanelView(discord.ui.View):
     @discord.ui.button(label="👑 管理者編集", style=discord.ButtonStyle.gray)
     async def operator_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
 
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+
         uid = str(interaction.user.id)
         guild_id = self.guild_id
 
@@ -516,6 +519,35 @@ class AdminListView(discord.ui.View):
             view=view,
             ephemeral=True
         )
+    @discord.ui.button(label="📢 公開する", style=discord.ButtonStyle.green)
+    async def publish(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        button.disabled = True
+        await interaction.message.edit(view=self)
+
+        # 一般ユーザー用リスト生成（OFF除外）
+        public_entries = {
+            uid: e for uid, e in self.entries.items()
+            if e.get("enabled", 1) == 1
+        }
+
+        embed = discord.Embed(title="📋一覧", color=discord.Color.blurple())
+
+        for uid, entry in public_entries.items():
+            member = self.guild.get_member(int(uid)) \
+                or await self.guild.fetch_member(int(uid))
+            name = member.display_name if member else uid
+
+            embed.add_field(
+                name=name,
+                value=f"{entry['role_name']}\n倍率: {entry['weight']:.1f}",
+                inline=False
+            )
+
+        embed.set_footer(text=f"登録人数: {len(public_entries)}人" if public_entries else "登録なし")
+
+        # ★ 公開（全体）
+        await interaction.channel.send(embed=embed)
 
 # =========================
 # delete
@@ -1239,7 +1271,7 @@ async def list_roles(interaction: discord.Interaction):
 
     if is_op:
         view = AdminListView(all_entries, guild_id, interaction.guild)
-        await interaction.followup.send(embed=embed, view=view)
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
     else:
         await interaction.followup.send(embed=embed)
     
