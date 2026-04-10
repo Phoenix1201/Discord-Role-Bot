@@ -247,6 +247,57 @@ def is_operator(guild_id, user_id):
 
     return result is not None
 
+class AdminPanelView(discord.ui.View):
+    def __init__(self, guild_id, guild):
+        super().__init__(timeout=60)
+        self.guild_id = guild_id
+        self.guild = guild
+
+    @discord.ui.button(label="🗑 削除", style=discord.ButtonStyle.red)
+    async def delete_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+        
+        entries = get_entries(self.guild_id)
+        view = DeleteView(entries, self.guild_id, self.guild)
+
+        await interaction.response.send_message(
+            "削除するユーザーを選択してください",
+            view=view,
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="⚖ 重み", style=discord.ButtonStyle.blurple)
+    async def weight_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+        
+        entries = get_entries(self.guild_id)
+        view = WeightView(entries, self.guild_id, self.guild)
+
+        await interaction.response.send_message(
+            "重みを変更するユーザーを選択してください",
+            view=view,
+            ephemeral=True
+        )
+
+    @discord.ui.button(label="🔁 ON/OFF", style=discord.ButtonStyle.green)
+    async def toggle_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+        
+        entries = get_entries(self.guild_id)
+        view = ToggleView(entries, self.guild_id, self.guild)
+
+        await interaction.response.send_message(
+            "ON/OFFを切り替えるユーザーを選択してください",
+            view=view,
+            ephemeral=True
+        )
+
 class ToggleSelect(discord.ui.Select):
     def __init__(self, entries, guild_id, guild):
         self.entries = entries
@@ -331,7 +382,65 @@ class AdminListView(discord.ui.View):
             view=view,
             ephemeral=True
         )
-        
+
+# =========================
+# delete
+# =========================
+class ConfirmDeleteView(discord.ui.View):
+    def __init__(self, guild_id, uid, entry):
+        super().__init__(timeout=30)
+        self.guild_id = guild_id
+        self.uid = uid
+        self.entry = entry
+        self.message = None
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return str(interaction.user.id) == self.uid
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+
+        if self.message:
+            await self.message.edit(
+                content="⏰ 時間切れでキャンセルされました",
+                view=self
+            )
+
+    @discord.ui.button(label="削除する", style=discord.ButtonStyle.red)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+
+        # ロール削除
+        if self.entry.get("role_id"):
+            role = interaction.guild.get_role(self.entry["role_id"])
+            if role:
+                try:
+                    await role.delete()
+                except:
+                    pass
+
+        delete_entry(self.guild_id, self.uid)
+
+        self.stop()
+        button.disabled = True
+        await interaction.edit_original_response(
+            content="✅ 削除しました",
+            embed=None,
+            view=None
+        )
+
+    @discord.ui.button(label="キャンセル", style=discord.ButtonStyle.gray)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.stop()
+        button.disabled = True
+        await interaction.response.defer()
+        await interaction.edit_original_response(
+            content="キャンセルしました",
+            embed=None,
+            view=None
+        )
+
 # =========================
 # 抽選
 # =========================
@@ -585,7 +694,7 @@ def operator_only():
         return True
     return app_commands.check(predicate)
 
-admin = app_commands.Group(name="admin", description="管理者用コマンド")
+
                 
 # =========================
 # Weight
@@ -724,7 +833,18 @@ class DeleteSelect(discord.ui.Select):
                 except:
                     pass
 
-        delete_entry(self.guild_id, uid)
+        view = ConfirmDeleteView(self.guild_id, uid, entry)
+
+        await interaction.response.send_message(
+            embed=create_role_embed(
+            "⚠️ この登録を削除しますか？",
+            entry["role_name"],
+            entry["color"],
+            member
+        ),
+        view=view,
+        ephemeral=True
+    )
 
         member = interaction.guild.get_member(int(uid))
         name = member.display_name if member else uid
@@ -867,17 +987,31 @@ async def delete(interaction: discord.Interaction):
 
     entry = entries[uid]
 
-    if entry.get("role_id"):
-        role = interaction.guild.get_role(entry["role_id"])
-        if role:
-            try:
-                await role.delete()
-            except:
-                pass
+    # 対象ユーザー取得
+    member = interaction.guild.get_member(int(entry["target"]))
+    if not member:
+        try:
+            member = await interaction.guild.fetch_member(int(entry["target"]))
+        except:
+            member = None
 
-    delete_entry(guild_id, uid)
+    # 現在の情報表示
+    embed = create_role_embed(
+        "⚠️ この登録を削除しますか？",
+        entry["role_name"],
+        entry["color"],
+        member
+    )
 
-    await interaction.response.send_message("自分の登録を削除しました", ephemeral=True)
+    view = ConfirmDeleteView(guild_id, uid, entry)
+
+    await interaction.response.send_message(
+        embed=embed,
+        view=view,
+        ephemeral=True
+    )
+
+    view.message = await interaction.original_response()
     
 # =========================
 # /dice
@@ -981,10 +1115,6 @@ async def list_roles(interaction: discord.Interaction):
 
     embed.set_footer(text=f"登録人数: {len(entries)}人" if entries else "登録なし")
 
-    if is_op:
-        view = AdminListView(all_entries, guild_id, interaction.guild)
-        await interaction.followup.send(embed=embed, view=view)
-    else:
         await interaction.followup.send(embed=embed)
 # =========================
 # /history
@@ -1012,35 +1142,9 @@ async def history(interaction: discord.Interaction):
 #==========================
 #/admin
 #==========================
-@admin.command(name="add_operator", description="Bot管理者追加")
-@app_commands.describe(user="追加するユーザー")
-async def add_operator_cmd(interaction: discord.Interaction, user: discord.Member):
-
-    # サーバー管理者のみ許可
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("サーバー管理者のみ実行可能", ephemeral=True)
-        return
-
-    add_operator(str(interaction.guild.id), str(user.id))
-
-    await interaction.response.send_message(
-        f"{user.display_name} をBot管理者に追加しました"
-    )
-
-@admin.command(name="remove_operator", description="Bot管理者削除")
-@app_commands.describe(user="削除するユーザー")
+@tree.command(name="admin", description="管理パネル")
 @operator_only()
-async def remove_operator_cmd(interaction: discord.Interaction, user: discord.Member):
-
-    remove_operator(str(interaction.guild.id), str(user.id))
-
-    await interaction.response.send_message(
-        f"{user.display_name} をBot管理者から削除しました"
-    )
-
-@admin.command(name="weight", description="重み変更")
-@operator_only()
-async def weight(interaction: discord.Interaction):
+async def admin_panel(interaction: discord.Interaction):
 
     guild_id = str(interaction.guild.id)
     entries = get_entries(guild_id)
@@ -1049,34 +1153,19 @@ async def weight(interaction: discord.Interaction):
         await interaction.response.send_message("登録がありません", ephemeral=True)
         return
 
-    view = WeightView(entries, guild_id, interaction.guild)
+    embed = discord.Embed(
+        title="⚙️ 管理パネル",
+        description="操作を選択してください",
+        color=discord.Color.blurple()
+    )
+
+    view = AdminPanelView(guild_id, interaction.guild)
 
     await interaction.response.send_message(
-        "重みを変更するユーザーを選択してください",
+        embed=embed,
         view=view,
         ephemeral=True
     )
-
-@admin.command(name="toggle", description="参加ON/OFF切替")
-@operator_only()
-async def toggle(interaction: discord.Interaction):
-
-    guild_id = str(interaction.guild.id)
-    entries = get_entries(guild_id)
-
-    if not entries:
-        await interaction.response.send_message("登録がありません", ephemeral=True)
-        return
-
-    view = ToggleView(entries, guild_id, interaction.guild)
-
-    await interaction.response.send_message(
-        "ON/OFFを切り替えるユーザーを選択してください",
-        view=view,
-        ephemeral=True
-    )
-
-tree.add_command(admin)
 
 # =========================
 # 起動
