@@ -330,7 +330,7 @@ class AdminPanelView(discord.ui.View):
 
         # 権限チェック
         if not (is_op or is_admin):
-            await interaction.response.send_message("権限なし", ephemeral=True)
+            await interaction.followup.send("権限なし", ephemeral=True)
             return
 
         embed = create_operator_embed(self.guild, guild_id)
@@ -342,7 +342,7 @@ class AdminPanelView(discord.ui.View):
             can_add_only=(is_admin and not is_op)  # サーバー管理者 → 追加だけ
         )
 
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        await interaction.followup.send(embed=embed, view=view, ephemeral=True)
             
 class ToggleSelect(discord.ui.Select):
     def __init__(self, entries, guild_id, guild):
@@ -1227,7 +1227,7 @@ async def dice(interaction: discord.Interaction):
 # =========================
 @tree.command(name="list", description="登録一覧")
 async def list_roles(interaction: discord.Interaction):
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
 
     guild_id = str(interaction.guild.id)
 
