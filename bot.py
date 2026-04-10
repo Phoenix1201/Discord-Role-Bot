@@ -278,8 +278,16 @@ class AdminPanelView(discord.ui.View):
         super().__init__(timeout=60)
         self.guild_id = guild_id
         self.guild = guild
+        self.is_full_access = is_full_access
 
-        if not is_full_access:
+    async def on_timeout(self):
+        pass
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return True
+
+    def disable_for_non_operator(self):
+        if not self.is_full_access:
             for item in self.children:
                 if item.label != "👑 管理者編集":
                     item.disabled = True
@@ -310,15 +318,29 @@ class AdminPanelView(discord.ui.View):
 
     @discord.ui.button(label="👑 管理者編集", style=discord.ButtonStyle.gray)
     async def operator_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not is_operator(self.guild_id, str(interaction.user.id)):
-            await interaction.response.send_message("Bot管理者のみ操作可能", ephemeral=True)
+
+        uid = str(interaction.user.id)
+        guild_id = self.guild_id
+
+        is_op = is_operator(guild_id, uid)
+        is_admin = interaction.user.guild_permissions.administrator
+
+        # 権限チェック
+        if not (is_op or is_admin):
+            await interaction.response.send_message("権限なし", ephemeral=True)
             return
-            
-        embed = create_operator_embed(self.guild, self.guild_id)
-        view = OperatorManageView(self.guild_id)
+
+        embed = create_operator_embed(self.guild, guild_id)
+
+        # ★ 権限渡す
+        view = OperatorManageView(
+            guild_id,
+            can_full_control=is_op,   # Bot管理者 → フル
+            can_add_only=(is_admin and not is_op)  # サーバー管理者 → 追加だけ
+        )
 
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-        
+            
 class ToggleSelect(discord.ui.Select):
     def __init__(self, entries, guild_id, guild):
         self.entries = entries
@@ -384,9 +406,20 @@ class ToggleView(discord.ui.View):
         self.add_item(ToggleSelect(entries, guild_id, guild))
 
 class OperatorManageView(discord.ui.View):
-    def __init__(self, guild_id):
+    def __init__(self, guild_id, can_full_control=False, can_add_only=False):
         super().__init__(timeout=60)
         self.guild_id = guild_id
+
+        # ★ 初期状態でボタン制御
+        if can_add_only:
+            for item in self.children:
+                if item.label != "追加":
+                    item.disabled = True
+
+        elif not can_full_control:
+            # どちらでもない場合は全部無効
+            for item in self.children:
+                item.disabled = True
 
     @discord.ui.button(label="追加", style=discord.ButtonStyle.green)
     async def add_op(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -401,6 +434,11 @@ class OperatorManageView(discord.ui.View):
 
     @discord.ui.button(label="解除", style=discord.ButtonStyle.red)
     async def remove_op(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if not is_operator(self.guild_id, str(interaction.user.id)):
+            await interaction.response.send_message("Bot管理者のみ操作可能", ephemeral=True)
+            return
+        
         button.disabled = True
         await interaction.response.edit_message(view=self)
 
@@ -1249,6 +1287,7 @@ async def admin_panel(interaction: discord.Interaction):
     is_full_access = is_op
 
     view = AdminPanelView(guild_id, interaction.guild, is_full_access)
+    view.disable_for_non_operator()
 
     await interaction.response.send_message(
         embed=embed,
