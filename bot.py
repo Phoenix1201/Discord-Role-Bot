@@ -319,9 +319,6 @@ class AdminPanelView(discord.ui.View):
     @discord.ui.button(label="👑 管理者編集", style=discord.ButtonStyle.gray)
     async def operator_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        button.disabled = True
-        await interaction.response.edit_message(view=self)
-
         uid = str(interaction.user.id)
         guild_id = self.guild_id
 
@@ -330,16 +327,18 @@ class AdminPanelView(discord.ui.View):
 
         # 権限チェック
         if not (is_op or is_admin):
-            await interaction.followup.send("権限なし", ephemeral=True)
+            await interaction.response.send_message("権限なし", ephemeral=True)
             return
 
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+        
         embed = create_operator_embed(self.guild, guild_id)
 
-        # ★ 権限渡す
         view = OperatorManageView(
             guild_id,
-            can_full_control=is_op,   # Bot管理者 → フル
-            can_add_only=(is_admin and not is_op)  # サーバー管理者 → 追加だけ
+            can_full_control=is_op,
+            can_add_only=(is_admin and not is_op)
         )
 
         await interaction.followup.send(embed=embed, view=view, ephemeral=True)
@@ -522,7 +521,7 @@ class AdminListView(discord.ui.View):
     @discord.ui.button(label="📢 公開する", style=discord.ButtonStyle.green)
     async def publish(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        await interaction.response.defer()  # ★ これ必須
+        await interaction.response.defer()
 
         button.disabled = True
 
@@ -551,8 +550,11 @@ class AdminListView(discord.ui.View):
 
         embed.set_footer(text=f"登録人数: {len(public_entries)}人" if public_entries else "登録なし")
 
-        await interaction.message.edit(view=None)
-        await interaction.channel.send(embed=embed)
+        await interaction.followup.send(embed=embed)
+        try:
+            await interaction.edit_original_response(view=None)
+        except:
+            pass
 
 # =========================
 # delete
