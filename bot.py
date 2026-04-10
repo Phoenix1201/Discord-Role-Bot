@@ -519,7 +519,7 @@ class AdminListView(discord.ui.View):
             view=view,
             ephemeral=True
         )
-   @discord.ui.button(label="📢 公開する", style=discord.ButtonStyle.green)
+    @discord.ui.button(label="📢 公開する", style=discord.ButtonStyle.green)
     async def publish(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         await interaction.response.defer()  # ★ これ必須
