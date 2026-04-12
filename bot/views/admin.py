@@ -1,4 +1,4 @@
-import Discord
+import discord
 
 class AdminPanelView(discord.ui.View):
     def __init__(self, guild_id, guild, is_full_access):
