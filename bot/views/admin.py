@@ -1,3 +1,5 @@
+import Discord
+
 class AdminPanelView(discord.ui.View):
     def __init__(self, guild_id, guild, is_full_access):
         super().__init__(timeout=60)
