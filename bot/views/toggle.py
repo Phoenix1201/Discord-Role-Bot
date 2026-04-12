@@ -20,7 +20,7 @@ class ToggleSelect(discord.ui.Select):
 
         for uid, e in sorted_entries:
             member = guild.get_member(int(uid))
-            name = get_display_name(member, uid)
+            name = member.display_name if member else f"不明ユーザー({uid})"
 
             enabled = e.get("enabled", 1)
             status = "🟢ON" if enabled else "🔴OFF"
