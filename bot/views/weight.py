@@ -1,4 +1,4 @@
-import Discord
+import discord
 
 class WeightSelect(discord.ui.Select):
     def __init__(self, entries, guild_id, guild):
