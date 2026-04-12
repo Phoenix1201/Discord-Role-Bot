@@ -178,12 +178,3 @@ def get_operators(guild_id):
     conn.close()
 
     return [r[0] for r in rows]
-
-# =========================
-# 補助（DB寄り）
-# =========================
-def get_enabled_entries(entries):
-    return {
-        uid: e for uid, e in entries.items()
-        if e.get("enabled", 1) == 1
-    }
