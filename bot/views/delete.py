@@ -17,7 +17,8 @@ async def delete(interaction: discord.Interaction):
     if not member:
         try:
             member = await interaction.guild.fetch_member(int(entry["target"]))
-        except:
+        except Exception as e:
+            print("fetch_member error:", e)
             member = None
 
     # 現在の情報表示
