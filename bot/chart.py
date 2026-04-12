@@ -6,8 +6,13 @@ import os
 
 FONT_PATH = os.path.join(os.path.dirname(__file__), "NotoSansJP-VariableFont_wght.ttf")
 
-FONT = ImageFont.truetype(FONT_PATH, 16)
-SMALL_FONT = ImageFont.truetype(FONT_PATH, 12)
+try:
+    FONT = ImageFont.truetype(FONT_PATH, 16)
+    SMALL_FONT = ImageFont.truetype(FONT_PATH, 12)
+except Exception as e:
+    print("フォントエラー:", e)
+    FONT = ImageFont.load_default()
+    SMALL_FONT = ImageFont.load_default()
 
 def create_pie_chart(entries):
     size = 260
