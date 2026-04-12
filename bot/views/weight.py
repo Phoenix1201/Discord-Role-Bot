@@ -15,7 +15,7 @@ class WeightSelect(discord.ui.Select):
 
         for i, (uid, e) in enumerate(sorted_entries, start=1):
             member = self.guild.get_member(int(uid))
-            name = get_display_name(member, uid)
+            name = member.display_name if member else f"不明ユーザー({uid})"
         
             weight = e["weight"]
 
