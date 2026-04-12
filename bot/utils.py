@@ -1,3 +1,5 @@
+MAX_WEIGHT = 3.0
+
 def is_enabled(entry):
     return entry.get("enabled", 1) == 1
 
