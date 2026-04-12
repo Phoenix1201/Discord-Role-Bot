@@ -1,19 +1,24 @@
-from utils import get_enabled_entries, get_member_safe
+import discord
+import random
+import asyncio
+
+from utils import get_enabled_entries, get_member_safe, normalize_color, is_enabled, MAX_WEIGHT
 from db import save_entry, add_history
 from embed import create_role_embed
 
 class DiceView(discord.ui.View):
-    def __init__(self, entries, guild_id):
+    def __init__(self, entries, guild_id, dice_running):
         super().__init__(timeout=60)
         self.entries = entries
         self.guild_id = guild_id
         self.used = False
+        self.dice_running = dice_running
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return True
 
     async def on_timeout(self):
-        dice_running[self.guild_id] = False
+        self.dice_running[self.guild_id] = False
 
         for item in self.children:
             item.disabled = True
