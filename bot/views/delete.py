@@ -1,3 +1,5 @@
+import Discord
+
 class ConfirmDeleteView(discord.ui.View):
     def __init__(self, guild_id, uid, entry):
         super().__init__(timeout=30)
