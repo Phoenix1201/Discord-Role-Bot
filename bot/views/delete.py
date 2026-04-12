@@ -1,4 +1,4 @@
-import Discord
+import discord
 
 class ConfirmDeleteView(discord.ui.View):
     def __init__(self, guild_id, uid, entry):
