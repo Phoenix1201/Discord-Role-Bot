@@ -133,6 +133,65 @@ async def dice(interaction: discord.Interaction):
     await interaction.followup.send(embed=embed, file=file, view=view)
 
 # =========================
+# /history
+# =========================
+@tree.command(name="history", description="過去の当選履歴")
+async def history(interaction: discord.Interaction):
+    guild_id = str(interaction.guild.id)
+
+    rows = get_history(guild_id)
+
+    if not rows:
+        await interaction.response.send_message("履歴がありません", ephemeral=True)
+        return
+
+    lines = []
+    for i, (uid, role_name) in enumerate(rows, start=1):
+        member = interaction.guild.get_member(int(uid))
+        name = member.display_name if member else f"ID:{uid}"
+
+        lines.append(f"{i}. {name} → {role_name}")
+
+    text = "\n".join(lines)
+
+    await interaction.response.send_message(
+        f"📜 過去の当選履歴（最新10件）\n{text}",
+        ephemeral=True
+    )
+
+# =========================
+# /toggle
+# =========================
+@tree.command(name="toggle", description="参加ON/OFF")
+async def toggle(interaction: discord.Interaction):
+    guild_id = str(interaction.guild.id)
+    entries = get_entries(guild_id)
+
+    view = ToggleView(entries, guild_id, interaction.guild)
+
+    await interaction.response.send_message(
+        "切り替えるユーザーを選択",
+        view=view,
+        ephemeral=True
+    )
+
+# =========================
+# /weight
+# =========================
+@tree.command(name="weight", description="重み変更")
+async def weight(interaction: discord.Interaction):
+    guild_id = str(interaction.guild.id)
+    entries = get_entries(guild_id)
+
+    view = WeightView(entries, guild_id, interaction.guild)
+
+    await interaction.response.send_message(
+        "重みを変更するユーザーを選択",
+        view=view,
+        ephemeral=True
+    )
+
+# =========================
 # 起動
 # =========================
 @client.event
