@@ -113,7 +113,7 @@ def save_entry(guild_id, user_id, entry):
         entry["target"],
         entry["weight"],
         entry.get("role_id"),
-        entry.get("enabled", 1)
+        entry.get("enabled", 1) or 1
     ))
 
     conn.commit()
@@ -151,6 +151,31 @@ def get_history(guild_id):
     rows = cur.fetchall()
     conn.close()
     return rows
+
+# =========================
+# Utility (共通関数)
+# =========================
+def is_enabled(entry):
+    return entry.get("enabled", 1) == 1
+
+def get_enabled_entries(entries):
+    return {
+        uid: e for uid, e in entries.items()
+        if is_enabled(e)
+    }
+
+async def get_member_safe(guild, uid):
+    member = guild.get_member(int(uid))
+    if not member:
+        try:
+            member = await guild.fetch_member(int(uid))
+        except:
+            return None
+    return member
+
+
+def get_display_name(member, uid):
+    return member.display_name if member else f"ID:{uid}"
 
 # =========================
 # 上書き確認ボタン
@@ -264,7 +289,7 @@ def create_operator_embed(guild, guild_id):
     desc = ""
     for uid in ops:
         member = guild.get_member(int(uid))
-        name = member.display_name if member else uid
+        name = get_display_name(member, uid)
         desc += f"・{name}\n"
 
     return discord.Embed(
@@ -360,7 +385,7 @@ class ToggleSelect(discord.ui.Select):
 
         for uid, e in sorted_entries:
             member = guild.get_member(int(uid))
-            name = member.display_name if member else uid
+            name = get_display_name(member, uid)
 
             enabled = e.get("enabled", 1)
             status = "🟢ON" if enabled else "🔴OFF"
@@ -392,7 +417,7 @@ class ToggleSelect(discord.ui.Select):
         save_entry(self.guild_id, uid, entry)
 
         member = interaction.guild.get_member(int(uid))
-        name = member.display_name if member else uid
+        name = get_display_name(member, uid)
 
         status = "🟢ON（参加中）" if entry["enabled"] else "🔴OFF（除外中）"
 
@@ -528,7 +553,7 @@ class AdminListView(discord.ui.View):
         # 一般用（ONのみ）
         public_entries = {
             uid: e for uid, e in self.entries.items()
-            if e.get("enabled", 1) == 1
+            if is_enabled(e)
         }
 
         embed = discord.Embed(title="📋一覧", color=discord.Color.blurple())
@@ -587,7 +612,7 @@ class ConfirmDeleteView(discord.ui.View):
         # ロール削除（安全チェック強化）
         if self.entry.get("role_id"):
             role = interaction.guild.get_role(self.entry["role_id"])
-            if role and role < interaction.guild.me.top_role and not role.managed:
+            if role and role.position < interaction.guild.me.top_role.position and not role.managed:
                 try:
                     await role.delete()
                 except Exception as e:
@@ -617,9 +642,7 @@ class ConfirmDeleteView(discord.ui.View):
 # 抽選
 # =========================
 def pick_winner(entries):
-    enabled_entries = {
-        uid: e for uid, e in entries.items() if e.get("enabled", 1) == 1
-    }
+    enabled_entries = get_enabled_entries(entries)
 
     users = list(enabled_entries.keys())
     weights = [enabled_entries[u].get("weight", 1) for u in users]
@@ -656,6 +679,7 @@ def create_pie_chart(entries):
     center = size // 2
     radius = 95
 
+    entries = get_enabled_entries(entries)
     total = sum(e["weight"] for e in entries.values())
     if total <= 0:
         total = 1
@@ -781,7 +805,12 @@ class DiceView(discord.ui.View):
             entry = self.entries[winner_id]
 
             winner_weight = entry["weight"]
-            total = sum(e["weight"] for e in self.entries.values()) or 1
+            enabled_entries = {
+                uid: e for uid, e in self.entries.items()
+                if is_enabled(e)
+            }
+
+            total = sum(e["weight"] for e in enabled_entries.values()) or 1
             chance = winner_weight / total * 100
 
             try:
@@ -803,7 +832,7 @@ class DiceView(discord.ui.View):
                     save_entry(self.guild_id, uid, e)
                     continue
 
-                if r != interaction.guild.default_role and r < interaction.guild.me.top_role and not r.managed:
+                if r != interaction.guild.default_role and r.position < interaction.guild.me.top_role.position and not r.managed:
                     try:
                         await r.delete()
                     except Exception as e:
@@ -829,7 +858,7 @@ class DiceView(discord.ui.View):
                 if uid == winner_id:
                     e["weight"] = 1
                 else:
-                    e["weight"] = min(e.get("weight", 1) + 0.25, MAX_WEIGHT)
+                    e["weight"] = round(min(e.get("weight", 1) + 0.2, MAX_WEIGHT), 1)
                 save_entry(self.guild_id, uid, e)
 
             add_history(self.guild_id, winner_id, entry["role_name"])
@@ -888,7 +917,7 @@ class WeightSelect(discord.ui.Select):
 
         for i, (uid, e) in enumerate(sorted_entries, start=1):
             member = self.guild.get_member(int(uid))
-            name = member.display_name if member else uid
+            name = get_display_name(member, uid)
         
             weight = e["weight"]
 
@@ -971,7 +1000,7 @@ class DeleteSelect(discord.ui.Select):
 
         for uid, e in entries.items():
             member = guild.get_member(int(uid))
-            name = member.display_name if member else uid
+            name = get_display_name(member, uid)
 
             options.append(
                 discord.SelectOption(
@@ -1190,10 +1219,7 @@ async def dice(interaction: discord.Interaction):
     try:
         await interaction.response.defer()
 
-        entries = {
-            uid: e for uid, e in get_entries(gid).items()
-            if e.get("enabled", 1) == 1
-        }
+        entries = get_enabled_entries(get_entries(gid))
 
         if not entries:
             dice_running[gid] = False
@@ -1214,9 +1240,8 @@ async def dice(interaction: discord.Interaction):
         sorted_entries = sorted(entries.items(), key=lambda x: x[1]["weight"], reverse=True)
 
         for i, (uid, entry) in enumerate(sorted_entries, start=1):
-            member = interaction.guild.get_member(int(uid)) \
-                or await interaction.guild.fetch_member(int(uid))
-            name = member.display_name if member else uid
+            member = await get_member_safe(interaction.guild, uid)
+            name = get_display_name(member, uid)
             desc += f"{i}. {name} → {entry['role_name']}\n"
         
         embed.add_field(name="参加者一覧", value=desc or "なし", inline=False)
@@ -1244,10 +1269,7 @@ async def list_roles(interaction: discord.Interaction):
     if is_op:
         entries = all_entries  # 管理者 → 全部
     else:
-        entries = {
-            uid: e for uid, e in all_entries.items()
-            if e.get("enabled", 1) == 1
-        }
+        entries = get_enabled_entries(entries)
     rows = get_history(guild_id)
 
     # ⭐ 最新当選者
@@ -1256,9 +1278,8 @@ async def list_roles(interaction: discord.Interaction):
     embed = discord.Embed(title="📋一覧", color=discord.Color.blurple())
 
     for uid, entry in entries.items():
-        member = interaction.guild.get_member(int(uid)) \
-            or await interaction.guild.fetch_member(int(uid))
-        name = member.display_name if member else uid
+        member = await get_member_safe(interaction.guild, uid)
+        name = get_display_name(member, uid)
 
         # ⭐ 強調
         if uid == last_winner:
@@ -1291,9 +1312,8 @@ async def history(interaction: discord.Interaction):
     rows = get_history(str(interaction.guild.id))
     desc = ""
     for i, (uid, role) in enumerate(rows, 1):
-        member = interaction.guild.get_member(int(uid)) \
-            or await interaction.guild.fetch_member(int(uid))
-        name = member.display_name if member else uid
+        member = await get_member_safe(interaction.guild, uid)
+        name = get_display_name(member, uid)
         desc += f"{i}. {name} → {role}\n"
     
     embed = discord.Embed(
