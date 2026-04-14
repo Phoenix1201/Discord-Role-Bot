@@ -11,8 +11,6 @@ from chart import create_pie_chart
 from views.dice import DiceView
 from views.admin import AdminPanelView
 from views.delete import ConfirmDeleteView
-from views.weight import WeightView
-from views.toggle import ToggleView
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -169,66 +167,69 @@ async def history(interaction: discord.Interaction):
 @tree.command(name="list", description="登録一覧")
 async def list_cmd(interaction: discord.Interaction):
     guild_id = str(interaction.guild.id)
-    entries = get_enabled_entries(get_entries(guild_id))
+    uid = str(interaction.user.id)
+
+    is_op = is_operator(guild_id, uid)
+    is_admin = interaction.user.guild_permissions.administrator
+
+    entries = get_entries(guild_id)
 
     if not entries:
         await interaction.response.send_message("登録なし", ephemeral=True)
         return
 
-    embed = discord.Embed(title="📋 登録一覧", color=discord.Color.blurple())
+    # 👑 管理者モード
+    if is_op or is_admin:
+        embed = discord.Embed(title="📋 登録一覧（管理者）", color=discord.Color.blurple())
 
-    for uid, entry in entries.items():
-        try:
-            member = interaction.guild.get_member(int(uid)) \
-                or await interaction.guild.fetch_member(int(uid))
-        except:
-            member = None
+        for uid, entry in entries.items():
+            try:
+                member = interaction.guild.get_member(int(uid)) \
+                    or await interaction.guild.fetch_member(int(uid))
+            except:
+                member = None
 
-        name = member.display_name if member else f"ID:{uid}"
+            name = member.display_name if member else f"ID:{uid}"
+            status = "ON" if is_enabled(entry) else "OFF"
 
-        status = "ON" if is_enabled(entry) else "OFF"
+            embed.add_field(
+                name=name,
+                value=f"{entry['role_name']}\n倍率: {entry['weight']:.1f} | {status}",
+                inline=False
+            )
 
-        embed.add_field(
-            name=name,
-            value=f"{entry['role_name']}\n倍率: {entry['weight']:.1f} | {status}",
-            inline=False
+        view = AdminListView(entries, guild_id, interaction.guild)
+
+        await interaction.response.send_message(
+            embed=embed,
+            view=view,
+            ephemeral=True
         )
 
-    embed.set_footer(text=f"登録人数: {len(entries)}人")
+    # 👤 一般ユーザー
+    else:
+        public_entries = get_enabled_entries(entries)
 
-    await interaction.response.send_message(embed=embed)
+        embed = discord.Embed(title="📋 登録一覧", color=discord.Color.blurple())
 
-# =========================
-# /toggle
-# =========================
-@tree.command(name="toggle", description="参加ON/OFF")
-async def toggle(interaction: discord.Interaction):
-    guild_id = str(interaction.guild.id)
-    entries = get_entries(guild_id)
+        for uid, entry in public_entries.items():
+            try:
+                member = interaction.guild.get_member(int(uid)) \
+                    or await interaction.guild.fetch_member(int(uid))
+            except:
+                member = None
 
-    view = ToggleView(entries, guild_id, interaction.guild)
+            name = member.display_name if member else f"ID:{uid}"
 
-    await interaction.response.send_message(
-        "切り替えるユーザーを選択",
-        view=view,
-        ephemeral=True
-    )
+            embed.add_field(
+                name=name,
+                value=f"{entry['role_name']}\n倍率: {entry['weight']:.1f}",
+                inline=False
+            )
 
-# =========================
-# /weight
-# =========================
-@tree.command(name="weight", description="重み変更")
-async def weight(interaction: discord.Interaction):
-    guild_id = str(interaction.guild.id)
-    entries = get_entries(guild_id)
+        embed.set_footer(text=f"登録人数: {len(public_entries)}人")
 
-    view = WeightView(entries, guild_id, interaction.guild)
-
-    await interaction.response.send_message(
-        "重みを変更するユーザーを選択",
-        view=view,
-        ephemeral=True
-    )
+        await interaction.response.send_message(embed=embed)
 
 # =========================
 # 起動
