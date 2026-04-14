@@ -1,5 +1,5 @@
 import discord
-from utils import normalize_color
+from utils import normalize_color, get_display_name
 from db import get_operators
 
 def create_role_embed(title, role_name, color_code, target_member=None):
