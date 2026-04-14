@@ -11,6 +11,7 @@ from chart import create_pie_chart
 from views.dice import DiceView
 from views.admin import AdminPanelView
 from views.delete import ConfirmDeleteView
+from views.confirm import ConfirmView
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -230,6 +231,86 @@ async def list_cmd(interaction: discord.Interaction):
         embed.set_footer(text=f"登録人数: {len(public_entries)}人")
 
         await interaction.response.send_message(embed=embed)
+        
+# =========================
+# /role
+# =========================
+@app_commands.describe(
+    name="ロール名",
+    color="カラーコード（例: FF0000）",
+    user="対象ユーザー（未指定なら自分）"
+)
+@tree.command(name="role", description="ロール登録")
+async def role(
+    interaction: discord.Interaction,
+    name: str,
+    color: str = None,
+    user: discord.Member = None
+):
+    guild_id = str(interaction.guild.id)
+    uid = str(interaction.user.id)
+
+    target_member = user if user else interaction.user
+
+    if color:
+        color = color.replace("#", "")
+
+    entries = get_entries(guild_id)
+    old = entries.get(uid)
+
+    entry = {
+        "role_name": name,
+        "color": color,
+        "target": str(target_member.id),
+        "weight": 1,
+        "role_id": old.get("role_id") if old else None
+    }
+
+    # =========================
+    # 既存あり → 上書き確認
+    # =========================
+    if old:
+        old_member = interaction.guild.get_member(int(old["target"]))
+
+        old_embed = create_role_embed(
+            "現在の設定",
+            old["role_name"],
+            old["color"],
+            old_member
+        )
+
+        new_embed = create_role_embed(
+            "新しい設定",
+            name,
+            color,
+            target_member
+        )
+
+        view = ConfirmView(guild_id, uid, entry)
+
+        await interaction.response.send_message(
+            content="⚠️ 上書きしますか？",
+            embeds=[old_embed, new_embed],
+            view=view,
+            ephemeral=True
+        )
+
+        view.message = await interaction.original_response()
+        return
+
+    # =========================
+    # 新規登録
+    # =========================
+    save_entry(guild_id, uid, entry)
+
+    embed = create_role_embed(
+        "✅登録しました",
+        name,
+        color,
+        target_member
+    )
+
+    await interaction.response.send_message(embed=embed)
 
 # =========================
 # 起動
