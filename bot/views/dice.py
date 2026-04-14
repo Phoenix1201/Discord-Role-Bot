@@ -11,6 +11,7 @@ class DiceView(discord.ui.View):
         super().__init__(timeout=60)
         self.entries = entries
         self.guild_id = guild_id
+        self.dice_running = dice_running
         self.used = False
         self.dice_running = dice_running
 
@@ -18,7 +19,7 @@ class DiceView(discord.ui.View):
         return True
 
     async def on_timeout(self):
-        self.dice_running[self.guild_id] = False
+        dice_running[self.guild_id] = False
 
         for item in self.children:
             item.disabled = True
