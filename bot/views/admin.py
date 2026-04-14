@@ -5,6 +5,7 @@ from embed import create_operator_embed
 from views.weight import WeightView
 from views.toggle import ToggleView
 from views.delete import ConfirmDeleteView
+from views.admin_manage import ManageMenuView
 
 class AdminPanelView(discord.ui.View):
     def __init__(self, guild_id, guild, is_full_access):
@@ -206,17 +207,20 @@ class AdminListView(discord.ui.View):
 
     @discord.ui.button(label="⚙️ 登録管理", style=discord.ButtonStyle.gray)
     async def manage(self, interaction: discord.Interaction, button: discord.ui.Button):
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
 
-        view = ToggleView(self.entries, self.guild_id, self.guild)
+        view = ManageMenuView(self.guild_id, self.guild)
 
-        await interaction.response.send_message(
-            "ON/OFFを切り替えるユーザーを選択",
+        await interaction.followup.send(
+            "管理メニュー",
             view=view,
             ephemeral=True
         )
 
     @discord.ui.button(label="📢 公開する", style=discord.ButtonStyle.green)
     async def publish(self, interaction: discord.Interaction, button: discord.ui.Button):
+        
 
         await interaction.response.defer()
 
