@@ -8,10 +8,10 @@ from utils import *
 from embed import create_role_embed, create_operator_embed
 from chart import create_pie_chart
 
-from views.dice import DiceView
-from views.admin import AdminPanelView
-from views.delete import ConfirmDeleteView
+from views.admin import AdminPanelView, AdminListView
 from views.confirm import ConfirmView
+from views.delete import ConfirmDeleteView
+from views.dice import DiceView
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
