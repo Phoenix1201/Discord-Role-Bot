@@ -136,29 +136,72 @@ async def dice(interaction: discord.Interaction):
 # =========================
 # /history
 # =========================
-@tree.command(name="history", description="過去の当選履歴")
-async def history(interaction: discord.Interaction):
+@tree.command(name="list", description="登録一覧")
+async def list_cmd(interaction: discord.Interaction):
     guild_id = str(interaction.guild.id)
+    entries = get_entries(guild_id)
 
-    rows = get_history(guild_id)
-
-    if not rows:
-        await interaction.response.send_message("履歴がありません", ephemeral=True)
+    if not entries:
+        await interaction.response.send_message("登録なし", ephemeral=True)
         return
 
-    lines = []
-    for i, (uid, role_name) in enumerate(rows, start=1):
-        member = interaction.guild.get_member(int(uid))
+    embed = discord.Embed(title="📋 登録一覧", color=discord.Color.blurple())
+
+    for uid, entry in entries.items():
+        try:
+            member = interaction.guild.get_member(int(uid)) \
+                or await interaction.guild.fetch_member(int(uid))
+        except:
+            member = None
+
         name = member.display_name if member else f"ID:{uid}"
 
-        lines.append(f"{i}. {name} → {role_name}")
+        status = "ON" if is_enabled(entry) else "OFF"
 
-    text = "\n".join(lines)
+        embed.add_field(
+            name=name,
+            value=f"{entry['role_name']}\n倍率: {entry['weight']:.1f} | {status}",
+            inline=False
+        )
 
-    await interaction.response.send_message(
-        f"📜 過去の当選履歴（最新10件）\n{text}",
-        ephemeral=True
-    )
+    embed.set_footer(text=f"登録人数: {len(entries)}人")
+
+    await interaction.response.send_message(embed=embed)
+
+# =========================
+# /list
+# =========================
+@tree.command(name="list", description="登録一覧")
+async def list_cmd(interaction: discord.Interaction):
+    guild_id = str(interaction.guild.id)
+    entries = get_enabled_entries(get_entries(guild_id))
+
+    if not entries:
+        await interaction.response.send_message("登録なし", ephemeral=True)
+        return
+
+    embed = discord.Embed(title="📋 登録一覧", color=discord.Color.blurple())
+
+    for uid, entry in entries.items():
+        try:
+            member = interaction.guild.get_member(int(uid)) \
+                or await interaction.guild.fetch_member(int(uid))
+        except:
+            member = None
+
+        name = member.display_name if member else f"ID:{uid}"
+
+        status = "ON" if is_enabled(entry) else "OFF"
+
+        embed.add_field(
+            name=name,
+            value=f"{entry['role_name']}\n倍率: {entry['weight']:.1f} | {status}",
+            inline=False
+        )
+
+    embed.set_footer(text=f"登録人数: {len(entries)}人")
+
+    await interaction.response.send_message(embed=embed)
 
 # =========================
 # /toggle
