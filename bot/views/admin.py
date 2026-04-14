@@ -4,7 +4,7 @@ from utils import *
 from embed import create_operator_embed
 from views.weight import WeightView
 from views.toggle import ToggleView
-from views.delete import DeleteView
+from views.delete import ConfirmDeleteView
 
 class AdminPanelView(discord.ui.View):
     def __init__(self, guild_id, guild, is_full_access):
@@ -176,6 +176,10 @@ class OperatorRemoveSelectView(discord.ui.View):
         super().__init__(timeout=60)
         self.add_item(OperatorRemoveSelect(guild_id))
 
+#===================
+#/list(管理者用)
+#===================
+
 class AdminListView(discord.ui.View):
     def __init__(self, entries, guild_id, guild):
         super().__init__(timeout=60)
@@ -186,7 +190,7 @@ class AdminListView(discord.ui.View):
     @discord.ui.button(label="⚙️ 登録管理", style=discord.ButtonStyle.gray)
     async def manage(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        view = DeleteView(self.entries, self.guild_id, self.guild)
+        view = ConfirmDeleteView(self.entries, self.guild_id, self.guild)
 
         await interaction.response.send_message(
             "削除するユーザーを選択してください",
