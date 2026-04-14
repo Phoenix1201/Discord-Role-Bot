@@ -160,7 +160,7 @@ async def history(interaction: discord.Interaction):
             inline=False
         )
 
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    await interaction.response.send_message(embed=embed)
     
 # =========================
 # /list
@@ -191,7 +191,7 @@ async def list_cmd(interaction: discord.Interaction):
                 member = None
 
             name = member.display_name if member else f"ID:{uid}"
-            status = "ON" if is_enabled(entry) else "OFF"
+            status = "🟢ON" if is_enabled(entry) else "🔴OFF"
 
             embed.add_field(
                 name=name,
