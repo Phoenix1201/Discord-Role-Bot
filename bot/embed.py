@@ -24,3 +24,18 @@ def create_role_embed(title, role_name, color_code, target_member=None):
         embed.set_thumbnail(url=image_url)
 
     return embed
+
+def create_operator_embed(guild, guild_id):
+    ops = get_operators(guild_id)
+
+    desc = ""
+    for uid in ops:
+        member = guild.get_member(int(uid))
+        name = get_display_name(member, uid)
+        desc += f"・{name}\n"
+
+    return discord.Embed(
+        title="👑 Bot管理者一覧",
+        description=desc or "なし",
+        color=discord.Color.gold()
+    )
