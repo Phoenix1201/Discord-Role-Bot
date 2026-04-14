@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 from db import *
 from utils import *
-from embed import create_role_embed
+from embed import create_role_embed, create_operator_embed
 from chart import create_pie_chart
 
 from views.dice import DiceView
@@ -129,7 +129,7 @@ async def dice(interaction: discord.Interaction):
     )
     embed.set_image(url="attachment://chart.png")
 
-    view = DiceView(entries, gid)
+    view = DiceView(entries, gid, dice_running)
     await interaction.followup.send(embed=embed, file=file, view=view)
 
 # =========================
