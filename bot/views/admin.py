@@ -197,30 +197,35 @@ class AdminListView(discord.ui.View):
         self.guild_id = guild_id
         self.guild = guild
 
+class AdminListView(discord.ui.View):
+    def __init__(self, entries, guild_id, guild):
+        super().__init__(timeout=60)
+        self.entries = entries
+        self.guild_id = guild_id
+        self.guild = guild
+
     @discord.ui.button(label="⚙️ 登録管理", style=discord.ButtonStyle.gray)
     async def manage(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        view = ConfirmDeleteView(self.entries, self.guild_id, self.guild)
+        view = ToggleView(self.entries, self.guild_id, self.guild)
 
         await interaction.response.send_message(
-            "削除するユーザーを選択してください",
+            "ON/OFFを切り替えるユーザーを選択",
             view=view,
             ephemeral=True
         )
+
     @discord.ui.button(label="📢 公開する", style=discord.ButtonStyle.green)
     async def publish(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         await interaction.response.defer()
 
-        button.disabled = True
-
-        # 一般用（ONのみ）
         public_entries = {
             uid: e for uid, e in self.entries.items()
             if is_enabled(e)
         }
 
-        embed = discord.Embed(title="📋一覧", color=discord.Color.blurple())
+        embed = discord.Embed(title="📋 登録一覧", color=discord.Color.blurple())
 
         for uid, entry in public_entries.items():
             try:
@@ -237,9 +242,15 @@ class AdminListView(discord.ui.View):
                 inline=False
             )
 
-        embed.set_footer(text=f"登録人数: {len(public_entries)}人" if public_entries else "登録なし")
+        embed.set_footer(text=f"登録人数: {len(public_entries)}人")
 
+        # チャンネルに送信（公開）
         await interaction.followup.send(embed=embed)
+
+        try:
+            await interaction.edit_original_response(view=None)
+        except:
+            pass
         try:
             await interaction.edit_original_response(view=None)
         except:
