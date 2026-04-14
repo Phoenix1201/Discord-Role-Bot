@@ -144,19 +144,18 @@ class OperatorAddSelect(discord.ui.UserSelect):
         ops = get_operators(self.guild_id)
 
         if uid in ops:
-            await interaction.response.send_message(
-                f"{user.display_name} は既に管理者です",
-                ephemeral=True
+            await interaction.response.edit_message(
+                content=f"{user.display_name} は既に管理者です",
+                view=None
             )
-            
-        return
+            return
 
-    add_operator(self.guild_id, uid)
+        add_operator(self.guild_id, uid)
 
-    await interaction.response.edit_message(
-        content=f"{user.display_name} を管理者に追加しました",
-        view=None
-    )
+        await interaction.response.edit_message(
+            content=f"{user.display_name} を管理者に追加しました",
+            view=None
+        )
 
 class OperatorAddSelectView(discord.ui.View):
     def __init__(self, guild_id):
