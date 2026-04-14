@@ -31,6 +31,8 @@ dice_running = {}
 @tree.command(name="admin", description="管理パネル")
 async def admin_panel(interaction: discord.Interaction):
 
+    await interaction.response.defer(ephemeral=True)
+
     guild_id = str(interaction.guild.id)
     uid = str(interaction.user.id)
 
@@ -38,7 +40,7 @@ async def admin_panel(interaction: discord.Interaction):
     is_admin = interaction.user.guild_permissions.administrator
 
     if not (is_op or is_admin):
-        await interaction.response.send_message("権限なし", ephemeral=True)
+        await interaction.followup.send("権限なし")
         return
 
     embed = create_operator_embed(interaction.guild, guild_id)
@@ -48,12 +50,11 @@ async def admin_panel(interaction: discord.Interaction):
     view = AdminPanelView(guild_id, interaction.guild, is_full_access)
     view.disable_for_non_operator()
 
-    await interaction.response.send_message(
+    await interaction.followup.send(
         embed=embed,
-        view=view,
-        ephemeral=True
+        view=view
     )
-
+    
 # =========================
 # /delete
 # =========================
