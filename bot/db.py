@@ -136,7 +136,7 @@ def get_history(guild_id):
 # =========================
 def add_operator(guild_id, user_id):
     ops = get_operators(guild_id)
-    if uid in ops:
+    if user_id in ops:
         return
     
     conn = get_conn()
