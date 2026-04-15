@@ -205,6 +205,7 @@ async def list_cmd(interaction: discord.Interaction):
     # 👤 一般ユーザー
     else:
         public_entries = get_enabled_entries(entries)
+        latest = get_latest_winner(guild_id)
 
         embed = discord.Embed(title="📋 登録一覧", color=discord.Color.blurple())
 
@@ -216,9 +217,10 @@ async def list_cmd(interaction: discord.Interaction):
                 member = None
 
             name = member.display_name if member else f"ID:{uid}"
-
+            mark = " 👑" if uid == latest else ""
+            
             embed.add_field(
-                name=name,
+                name=f"{name}{mark}",
                 value=f"{entry['role_name']}\n倍率: {entry['weight']:.1f}",
                 inline=False
             )
