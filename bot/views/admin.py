@@ -179,25 +179,20 @@ class AdminListView(discord.ui.View):
     @discord.ui.button(label="📢 公開する", style=discord.ButtonStyle.green)
     async def publish(self, interaction: discord.Interaction, button: discord.ui.Button):
         
-
         await interaction.response.defer()
-
-        public_entries = {
-            uid: e for uid, e in self.entries.items()
-            if is_enabled(e)
-        }
-        
-        latest = get_latest_winner(guild_id)
         
         embed = discord.Embed(title="📋 登録一覧", color=discord.Color.blurple())
 
-        for uid, entry in public_entries.items():
-            try:
-                member = self.guild.get_member(int(uid)) \
-                    or await self.guild.fetch_member(int(uid))
-            except:
-                member = None
+        latest = get_latest_winner(self.guild_id)
+        
+        sorted_entries = sorted(
+            public_entries.items(),
+            key=lambda x: x[1]["weight"],
+            reverse=True
+        )
 
+        for uid, entry in sorted_entries:
+            member = await get_member_safe(self.guild, uid)
             name = member.display_name if member else f"ID:{uid}"
             mark = " 👑" if uid == latest else ""
 
@@ -212,10 +207,6 @@ class AdminListView(discord.ui.View):
         # チャンネルに送信（公開）
         await interaction.followup.send(embed=embed)
 
-        try:
-            await interaction.edit_original_response(view=None)
-        except:
-            pass
         try:
             await interaction.edit_original_response(view=None)
         except:
