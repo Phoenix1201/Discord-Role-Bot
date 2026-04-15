@@ -31,7 +31,7 @@ class HistoryView(discord.ui.View):
             mark = " 👑" if uid == latest else ""
             
             embed.add_field(
-                name=f"{i}. {name}",
+                name=f"{i}. {name}{mark}",
                 value=role_name,
                 inline=False
             )
