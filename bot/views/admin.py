@@ -183,6 +183,11 @@ class AdminListView(discord.ui.View):
         
         embed = discord.Embed(title="📋 登録一覧", color=discord.Color.blurple())
 
+        public_entries = {
+            uid: e for uid, e in self.entries.items()
+            if is_enabled(e)
+        }
+
         latest = get_latest_winner(self.guild_id)
         
         sorted_entries = sorted(
