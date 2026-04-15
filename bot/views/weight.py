@@ -1,4 +1,6 @@
 import discord
+from utils import MAX_WEIGHT
+from db import get_entries, save_entry
 
 class WeightSelect(discord.ui.Select):
     def __init__(self, entries, guild_id, guild):
