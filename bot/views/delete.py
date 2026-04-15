@@ -53,3 +53,45 @@ class ConfirmDeleteView(discord.ui.View):
             embed=None,
             view=None
         )
+
+class DeleteSelect(discord.ui.Select):
+    def __init__(self, entries, guild_id, guild):
+        self.entries = entries
+        self.guild_id = guild_id
+        self.guild = guild
+
+        options = []
+
+        for uid, e in entries.items():
+            member = guild.get_member(int(uid))
+            name = member.display_name if member else f"不明({uid})"
+
+            options.append(
+                discord.SelectOption(
+                    label=name,
+                    value=uid
+                )
+            )
+
+        super().__init__(
+            placeholder="削除するユーザーを選択",
+            options=options[:25]
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        uid = self.values[0]
+        entry = self.entries[uid]
+
+        view = ConfirmDeleteView(self.guild_id, uid, entry)
+
+        await interaction.response.send_message(
+            f"{uid} を削除しますか？",
+            view=view,
+            ephemeral=True
+        )
+
+
+class DeleteView(discord.ui.View):
+    def __init__(self, entries, guild_id, guild):
+        super().__init__(timeout=60)
+        self.add_item(DeleteSelect(entries, guild_id, guild))
