@@ -186,7 +186,9 @@ class AdminListView(discord.ui.View):
             uid: e for uid, e in self.entries.items()
             if is_enabled(e)
         }
-
+        
+        latest = get_latest_winner(guild_id)
+        
         embed = discord.Embed(title="📋 登録一覧", color=discord.Color.blurple())
 
         for uid, entry in public_entries.items():
@@ -197,9 +199,10 @@ class AdminListView(discord.ui.View):
                 member = None
 
             name = member.display_name if member else f"ID:{uid}"
+            mark = " 👑" if uid == latest else ""
 
             embed.add_field(
-                name=name,
+                name=f"{name}{mark}",
                 value=f"{entry['role_name']}\n倍率: {entry['weight']:.1f}",
                 inline=False
             )
