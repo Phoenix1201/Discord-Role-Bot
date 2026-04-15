@@ -114,17 +114,26 @@ async def dice(interaction: discord.Interaction):
 
     entries = get_enabled_entries(get_entries(gid))
 
-    if not entries:
-        dice_running[gid] = False
-        await interaction.followup.send("登録なし")
-        return
+    # グラフと同じ順番
+    sorted_entries = sorted(
+        entries.items(),
+        key=lambda x: x[1]["weight"],
+        reverse=True
+    )
 
-    img = create_pie_chart(entries)
-    file = discord.File(img, filename="chart.png")
+    desc = "ボタンを押して抽選！\n\n"
+
+    for i, (uid, e) in enumerate(sorted_entries, start=1):
+        member = interaction.guild.get_member(int(uid))
+        name = member.display_name if member else f"ID:{uid}"
+    
+        role_name = e["role_name"]
+
+        desc += f"{i}. {name} - {role_name}\n"
 
     embed = discord.Embed(
         title="🎲 抽選準備",
-        description="ボタンを押して抽選！"
+        description=desc
     )
     embed.set_image(url="attachment://chart.png")
 
