@@ -190,14 +190,6 @@ class OperatorRemoveSelectView(discord.ui.View):
 #===================
 #/list(管理者用)
 #===================
-
-class AdminListView(discord.ui.View):
-    def __init__(self, entries, guild_id, guild):
-        super().__init__(timeout=60)
-        self.entries = entries
-        self.guild_id = guild_id
-        self.guild = guild
-
 class AdminListView(discord.ui.View):
     def __init__(self, entries, guild_id, guild):
         super().__init__(timeout=60)
