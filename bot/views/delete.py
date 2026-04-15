@@ -84,12 +84,14 @@ class DeleteSelect(discord.ui.Select):
 
         view = ConfirmDeleteView(self.guild_id, uid, entry)
 
+        member = interaction.guild.get_member(int(uid))
+        name = member.display_name if member else uid
+
         await interaction.response.send_message(
-            f"{uid} を削除しますか？",
+            f"{name} を削除しますか？",
             view=view,
             ephemeral=True
         )
-
 
 class DeleteView(discord.ui.View):
     def __init__(self, entries, guild_id, guild):
