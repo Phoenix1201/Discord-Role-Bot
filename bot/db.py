@@ -131,6 +131,21 @@ def get_history(guild_id):
     conn.close()
     return rows
 
+def get_latest_winner(guild_id):
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+    SELECT winner_id FROM history
+    WHERE guild_id=?
+    ORDER BY ts DESC LIMIT 1
+    """, (guild_id,))
+
+    row = cur.fetchone()
+    conn.close()
+
+    return row[0] if row else None
+    
 # =========================
 # operators
 # =========================
