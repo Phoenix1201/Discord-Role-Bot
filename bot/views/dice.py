@@ -131,7 +131,7 @@ class DiceView(discord.ui.View):
             await msg.edit(content="エラーが発生しました")
 
         finally:
-            dice_running[self.guild_id] = False
+            self.dice_running[self.guild_id] = False
           
 # ===================
 # == pick winner ====
