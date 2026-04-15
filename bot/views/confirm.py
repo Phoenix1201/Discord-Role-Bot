@@ -1,5 +1,5 @@
 import discord
-from db import save_entry
+from db import save_entry, delete_entry
 from embed import create_role_embed
 
 class ConfirmView(discord.ui.View):
