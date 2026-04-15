@@ -12,6 +12,7 @@ from views.admin import AdminPanelView, AdminListView
 from views.confirm import ConfirmView
 from views.delete import ConfirmDeleteView
 from views.dice import DiceView
+from views.history import HistoryView
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -147,28 +148,14 @@ async def dice(interaction: discord.Interaction):
 async def history(interaction: discord.Interaction):
     guild_id = str(interaction.guild.id)
 
-    rows = get_history(guild_id)
+    view = HistoryView(guild_id, interaction.guild, limit=5)
 
-    if not rows:
-        await interaction.response.send_message("履歴がありません", ephemeral=True)
-        return
+    embed = view.build_embed()
 
-    embed = discord.Embed(
-        title="📜 過去の当選履歴（最新10件）",
-        color=discord.Color.gold()
+    await interaction.response.send_message(
+        embed=embed,
+        view=view
     )
-
-    for i, (uid, role_name) in enumerate(rows, start=1):
-        member = interaction.guild.get_member(int(uid))
-        name = member.display_name if member else f"ID:{uid}"
-
-        embed.add_field(
-            name=f"{i}. {name}",
-            value=role_name,
-            inline=False
-        )
-
-    await interaction.response.send_message(embed=embed)
     
 # =========================
 # /list
