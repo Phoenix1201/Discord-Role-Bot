@@ -1,5 +1,5 @@
 import discord
-from db import get_history
+from db import get_history, get_latest_winner
 
 class HistoryView(discord.ui.View):
     def __init__(self, guild_id, guild, limit=5):
@@ -28,7 +28,8 @@ class HistoryView(discord.ui.View):
         for i, (uid, role_name) in enumerate(display_rows, start=1):
             member = self.guild.get_member(int(uid))
             name = member.display_name if member else f"ID:{uid}"
-
+            mark = " 👑" if uid == latest else ""
+            
             embed.add_field(
                 name=f"{i}. {name}",
                 value=role_name,
