@@ -10,6 +10,7 @@ class HistoryView(discord.ui.View):
 
     def build_embed(self):
         rows = get_history(self.guild_id)
+        latest = get_latest_winner(self.guild_id)
 
         if not rows:
             return discord.Embed(
