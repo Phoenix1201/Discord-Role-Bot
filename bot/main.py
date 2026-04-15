@@ -46,8 +46,7 @@ async def admin_panel(interaction: discord.Interaction):
 
     is_full_access = is_op
 
-    view = AdminPanelView(guild_id, interaction.guild, is_full_access)
-    view.disable_for_non_operator()
+    view = AdminPanelView(guild_id, interaction.guild)
 
     await interaction.followup.send(
         embed=embed,
