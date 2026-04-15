@@ -114,6 +114,13 @@ async def dice(interaction: discord.Interaction):
     await interaction.response.defer()
 
     entries = get_enabled_entries(get_entries(gid))
+    if not entries:
+        dice_running[gid] = False
+        await interaction.followup.send("登録なし")
+        return
+
+    img = create_pie_chart(entries)
+    file = discord.File(img, filename="chart.png")
 
     # グラフと同じ順番
     sorted_entries = sorted(
