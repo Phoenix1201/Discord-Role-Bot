@@ -66,8 +66,7 @@ class DiceView(discord.ui.View):
             chance = winner_weight / total * 100
 
             try:
-                member = interaction.guild.get_member(int(entry["target"])) \
-                    or await interaction.guild.fetch_member(int(entry["target"]))
+                member = await get_member_safe(interaction.guild, entry["target"])
             except:
                 await interaction.followup.send("⚠️ ユーザー取得に失敗しました")
                 return
