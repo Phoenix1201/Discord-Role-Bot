@@ -1,7 +1,10 @@
+import discord
+
 MAX_WEIGHT = 3.0
 
 def is_enabled(entry):
     return entry.get("enabled", 1) == 1
+
 
 def get_enabled_entries(entries):
     return {
@@ -9,17 +12,21 @@ def get_enabled_entries(entries):
         if is_enabled(e)
     }
 
-async def get_member_safe(guild, uid):
-    member = guild.get_member(int(uid))
-    if not member:
-        try:
-            member = await guild.fetch_member(int(uid))
-        except:
-            return None
-    return member
 
-def get_display_name(member, uid):
+async def get_member_safe(guild: discord.Guild, uid: str):
+    member = guild.get_member(int(uid))
+    if member:
+        return member
+
+    try:
+        return await guild.fetch_member(int(uid))
+    except:
+        return None
+
+
+def get_display_name(member, uid: str):
     return member.display_name if member else f"ID:{uid}"
+
 
 def normalize_color(code: str) -> int:
     try:
