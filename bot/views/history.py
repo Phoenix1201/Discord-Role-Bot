@@ -45,6 +45,7 @@ class HistoryView(discord.ui.View):
     @discord.ui.button(label="全履歴", style=discord.ButtonStyle.green)
     async def show_all(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = HistoryAllView(self.history_full)
+        await view.update_first(interaction)
 
         embed = await create_history_embed(
             view.get_page_data(),
@@ -80,7 +81,7 @@ class HistoryAllView(BaseTimeoutView):
             return 0
         return (len(self.history) - 1) // self.per_page
 
-    async def update(self, interaction: discord.Interaction):
+    async def update_first(self, interaction: discord.Interaction):
         max_page = self.get_max_page()
 
         # ページ表示更新
@@ -98,7 +99,8 @@ class HistoryAllView(BaseTimeoutView):
 
         await interaction.response.edit_message(
             embed=embed,
-            view=self
+            view=self,
+            ephemeral=True
         )
 
     # =========================
