@@ -14,7 +14,7 @@ class BaseTimeoutView(discord.ui.View):
 # =========================
 # Embed生成
 # =========================
-def create_history_embed(data, title="履歴"):
+async def create_history_embed(data, guild, title="履歴"):
     embed = discord.Embed(
         title=title,
         color=discord.Color.blue()
@@ -25,11 +25,12 @@ def create_history_embed(data, title="履歴"):
         return embed
 
     text = ""
-    for i, entry in enumerate(data, 1):
+    for i, (uid, role_name) in enumerate(data, 1):
         member = await get_member_safe(guild, uid)
         name = get_display_name(member, uid)
-        text += f"{i}. {name} - {role_name}\n"
 
+        text += f"{i}. {name} - {role_name}\n"
+        
     embed.description = text
     return embed
 
