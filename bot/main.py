@@ -133,7 +133,14 @@ async def dice(interaction: discord.Interaction):
         reverse=True
     )
 
+    last_time = get_last_dice_time(gid)
+
     desc = "ボタンを押して抽選！\n\n"
+
+    if last_time:
+        desc += f"🕒 前回抽選: {last_time}\n\n"
+    else:
+        desc += "🕒 前回抽選: なし\n\n"
 
     for i, (uid, e) in enumerate(sorted_entries, start=1):
         member = interaction.guild.get_member(int(uid))
