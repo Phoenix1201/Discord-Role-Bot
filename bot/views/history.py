@@ -1,59 +1,116 @@
 import discord
-from db import get_history, get_latest_winner
 
-class HistoryView(discord.ui.View):
-    def __init__(self, guild_id, guild, limit=5):
-        super().__init__(timeout=60)
-        self.guild_id = guild_id
-        self.guild = guild
-        self.limit = limit
+# =========================
+# 共通：タイムアウト処理
+# =========================
+class BaseTimeoutView(discord.ui.View):
+    async def on_timeout(self):
+        for child in self.children:
+            child.disabled = True
+        if hasattr(self, "message") and self.message:
+            await self.message.edit(view=self)
 
-    def build_embed(self):
-        rows = get_history(self.guild_id)
-        latest = get_latest_winner(self.guild_id)
+# =========================
+# Embed生成
+# =========================
+def create_history_embed(data, title="履歴"):
+    embed = discord.Embed(
+        title=title,
+        color=discord.Color.blue()
+    )
 
-        if not rows:
-            return discord.Embed(
-                title="📜 履歴",
-                description="履歴がありません",
-                color=discord.Color.gold()
-            )
-
-        display_rows = rows[:self.limit] if self.limit else rows
-
-        embed = discord.Embed(
-            title=f"📜 履歴（最新{len(display_rows)}件）",
-            color=discord.Color.gold()
-        )
-
-        for i, (uid, role_name) in enumerate(display_rows, start=1):
-            member = self.guild.get_member(int(uid))
-            name = member.display_name if member else f"ID:{uid}"
-            mark = " 👑" if uid == latest else ""
-            
-            embed.add_field(
-                name=f"{i}. {name}{mark}",
-                value=role_name,
-                inline=False
-            )
-
+    if not data:
+        embed.description = "履歴がありません"
         return embed
 
-    async def update(self, interaction):
-        embed = self.build_embed()
-        await interaction.response.edit_message(embed=embed, view=self)
+    text = ""
+    for i, entry in enumerate(data, 1):
+        text += f"{i}. {entry}\n"
 
-    @discord.ui.button(label="5件", style=discord.ButtonStyle.gray)
-    async def show5(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.limit = 5
-        await self.update(interaction)
+    embed.description = text
+    return embed
 
-    @discord.ui.button(label="10件", style=discord.ButtonStyle.gray)
-    async def show10(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.limit = 10
-        await self.update(interaction)
+# =========================
+# 通常履歴（5件）
+# =========================
+class HistoryView(BaseTimeoutView):
+    def __init__(self, history):
+        super().__init__(timeout=60)
+        self.history_full = history
+        self.history = history[:5]
 
-    @discord.ui.button(label="全て", style=discord.ButtonStyle.green)
+    @discord.ui.button(label="全履歴", style=discord.ButtonStyle.green)
     async def show_all(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.limit = None
+        view = HistoryAllView(self.history_full)
+
+        embed = create_history_embed(
+            view.get_page_data(),
+            title="📜 全履歴"
+        )
+
+        await interaction.response.send_message(
+            embed=embed,
+            view=view,
+            ephemeral=True
+        )
+
+        view.message = await interaction.original_response()
+
+# =========================
+# 全履歴（ページング）
+# =========================
+class HistoryAllView(BaseTimeoutView):
+    def __init__(self, history):
+        super().__init__(timeout=120)
+        self.history = history
+        self.page = 0
+        self.per_page = 10
+
+    def get_page_data(self):
+        start = self.page * self.per_page
+        end = start + self.per_page
+        return self.history[start:end]
+
+    def get_max_page(self):
+        if not self.history:
+            return 0
+        return (len(self.history) - 1) // self.per_page
+
+    async def update(self, interaction: discord.Interaction):
+        max_page = self.get_max_page()
+
+        # ページ表示更新
+        self.page_label.label = f"{self.page+1}/{max_page+1}"
+
+        # ボタン制御
+        self.prev.disabled = self.page == 0
+        self.next.disabled = self.page == max_page
+
+        embed = create_history_embed(
+            self.get_page_data(),
+            title="📜 全履歴"
+        )
+
+        await interaction.response.edit_message(
+            embed=embed,
+            view=self
+        )
+
+    # =========================
+    # ボタン
+    # =========================
+    @discord.ui.button(label="<<", style=discord.ButtonStyle.gray)
+    async def prev(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.page > 0:
+            self.page -= 1
+        await self.update(interaction)
+
+    @discord.ui.button(label="1/1", style=discord.ButtonStyle.gray, disabled=True)
+    async def page_label(self, interaction: discord.Interaction, button: discord.ui.Button):
+        pass
+
+    @discord.ui.button(label=">>", style=discord.ButtonStyle.gray)
+    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.page < self.get_max_page():
+            self.page += 1
         await self.update(interaction)
