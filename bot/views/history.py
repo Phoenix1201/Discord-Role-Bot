@@ -47,9 +47,10 @@ class HistoryView(BaseTimeoutView):
     async def show_all(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = HistoryAllView(self.history_full)
 
-        embed = create_history_embed(
-            view.get_page_data(),
-            title="📜 全履歴"
+        embed = await create_history_embed(
+            data[:5],
+            interaction.guild,
+            title="📜 履歴（最新5件）"
         )
 
         await interaction.response.send_message(
@@ -90,8 +91,9 @@ class HistoryAllView(BaseTimeoutView):
         self.prev.disabled = self.page == 0
         self.next.disabled = self.page == max_page
 
-        embed = create_history_embed(
+        embed = await create_history_embed(
             self.get_page_data(),
+            interaction.guild,
             title="📜 全履歴"
         )
 
