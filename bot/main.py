@@ -14,21 +14,25 @@ from views.delete import ConfirmDeleteView
 from views.dice import DiceView
 from views.history import HistoryView, create_history_embed
 
-load_dotenv()
-TOKEN = os.getenv("DISCORD_TOKEN")
+from discord.ext import commands
 
 intents = discord.Intents.default()
 intents.members = True
 
-client = discord.Client(intents=intents)
-tree = app_commands.CommandTree(client)
+bot = commands.Bot(
+    command_prefix="!",
+    intents=intents
+)
+
+load_dotenv()
+TOKEN = os.getenv("DISCORD_TOKEN")
 
 dice_running = {}
 
 # =========================
 # /admin
 # =========================
-@tree.command(name="admin", description="管理パネル")
+@bot.tree.command(name="admin", description="管理パネル")
 async def admin_panel(interaction: discord.Interaction):
 
     await interaction.response.defer(ephemeral=True)
@@ -57,7 +61,7 @@ async def admin_panel(interaction: discord.Interaction):
 # =========================
 # /delete
 # =========================
-@tree.command(name="delete", description="登録削除")
+@bot.tree.command(name="delete", description="登録削除")
 async def delete(interaction: discord.Interaction):
 
     guild_id = str(interaction.guild.id)
@@ -101,7 +105,7 @@ async def delete(interaction: discord.Interaction):
 # =========================
 # /dice
 # =========================
-@tree.command(name="dice", description="抽選")
+@bot.tree.command(name="dice", description="抽選")
 async def dice(interaction: discord.Interaction):
     gid = str(interaction.guild.id)
 
@@ -165,10 +169,11 @@ async def history(interaction: discord.Interaction):
     )
 
     view.message = await interaction.original_response()
+    
 # =========================
 # /list
 # =========================
-@tree.command(name="list", description="登録一覧")
+@bot.tree.command(name="list", description="登録一覧")
 async def list_cmd(interaction: discord.Interaction):
     guild_id = str(interaction.guild.id)
     uid = str(interaction.user.id)
@@ -245,7 +250,7 @@ async def list_cmd(interaction: discord.Interaction):
     color="カラーコード（例: FF0000）",
     user="対象ユーザー（未指定なら自分）"
 )
-@tree.command(name="role", description="ロール登録")
+@bot.tree.command(name="role", description="ロール登録")
 async def role(
     interaction: discord.Interaction,
     name: str,
@@ -320,11 +325,11 @@ async def role(
 # =========================
 # 起動
 # =========================
-@client.event
+@bot.event
 async def on_ready():
     os.makedirs("/data", exist_ok=True)
     init_db()
-    await tree.sync()
+    await bot.tree.sync()
     print("起動完了")
 
-client.run(TOKEN)
+bot.run(TOKEN)
