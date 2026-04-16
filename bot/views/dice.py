@@ -65,11 +65,13 @@ class DiceView(discord.ui.View):
             total = sum(e["weight"] for e in enabled_entries.values()) or 1
             chance = winner_weight / total * 100
 
-            try:
-                member = await get_member_safe(interaction.guild, entry["target"])
-            except:
-                await interaction.followup.send("⚠️ ユーザー取得に失敗しました")
+            target_id = entry.get("target")
+
+            if not target_id:
+                await interaction.followup.send("⚠️ 対象ユーザーが存在しません")
                 return
+
+            member = await get_member_safe(interaction.guild, target_id)
 
             # ロール削除
             for uid, e in self.entries.items():
@@ -123,7 +125,7 @@ class DiceView(discord.ui.View):
             embed.description = (embed.description or "") + f"\n当選確率: {chance:.1f}%"
 
             # ② 同じメッセージを結果に変更
-            await msg.edit(content=None, embed=embed)
+            await msg.edit(content="", embed=embed)
             
         except Exception as e:
             print("dice error:", e)
@@ -138,10 +140,10 @@ class DiceView(discord.ui.View):
 def pick_winner(entries):
     enabled_entries = get_enabled_entries(entries)
 
+    if not enabled_entries:
+        return None
+
     users = list(enabled_entries.keys())
     weights = [enabled_entries[u].get("weight", 1) for u in users]
-
-    if not users:
-        return None
 
     return random.choices(users, weights=weights, k=1)[0]
