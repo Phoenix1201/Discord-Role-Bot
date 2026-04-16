@@ -12,7 +12,7 @@ from views.admin import AdminPanelView, AdminListView
 from views.confirm import ConfirmView
 from views.delete import ConfirmDeleteView
 from views.dice import DiceView
-from views.history import HistoryView
+from views.history import HistoryView, create_history_embed
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -151,19 +151,20 @@ async def dice(interaction: discord.Interaction):
 # =========================
 # /history
 # =========================
-@tree.command(name="history", description="過去の当選履歴")
+@bot.tree.command(name="history")
 async def history(interaction: discord.Interaction):
-    guild_id = str(interaction.guild.id)
+    data = get_history(interaction.user.id)  # ← 自分のDB
 
-    view = HistoryView(guild_id, interaction.guild, limit=5)
+    view = HistoryView(data)
 
-    embed = view.build_embed()
+    embed = create_history_embed(data[:5], title="📜 履歴（最新5件）")
 
     await interaction.response.send_message(
         embed=embed,
         view=view
     )
-    
+
+    view.message = await interaction.original_response()
 # =========================
 # /list
 # =========================
