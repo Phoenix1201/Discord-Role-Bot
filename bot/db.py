@@ -118,14 +118,24 @@ def add_history(guild_id, winner_id, role_name):
     conn.commit()
     conn.close()
 
-def get_history(guild_id):
+def get_history(guild_id, limit=None):
     conn = get_conn()
     cur = conn.cursor()
 
-    cur.execute("""
-    SELECT winner_id, role_name FROM history
-    WHERE guild_id=? ORDER BY ts DESC LIMIT 10
-    """, (guild_id,))
+    query = """
+    SELECT winner_id, role_name
+    FROM history
+    WHERE guild_id=?
+    ORDER BY ts DESC
+    """
+
+    params = [guild_id]
+
+    if limit is not None:
+        query += " LIMIT ?"
+        params.append(limit)
+
+    cur.execute(query, params)
 
     rows = cur.fetchall()
     conn.close()
