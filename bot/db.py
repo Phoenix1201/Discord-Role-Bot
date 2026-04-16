@@ -48,6 +48,13 @@ def init_db():
     )
     """)
 
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS dice_meta (
+        guild_id TEXT PRIMARY KEY,
+        last_time TEXT
+    )
+    """)
+
     conn.commit()
     conn.close()
 
