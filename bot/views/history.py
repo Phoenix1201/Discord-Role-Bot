@@ -25,7 +25,8 @@ def create_history_embed(data, title="履歴"):
 
     text = ""
     for i, entry in enumerate(data, 1):
-        text += f"{i}. {entry}\n"
+        name = member.display_name if member else f"ID:{uid}"
+        text += f"{i}. {name} - {role_name}\n"
 
     embed.description = text
     return embed
