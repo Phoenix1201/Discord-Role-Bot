@@ -157,6 +157,44 @@ def get_latest_winner(guild_id):
     return row[0] if row else None
     
 # =========================
+# dice
+# =========================
+def update_last_dice_time(guild_id):
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS dice_meta (
+        guild_id TEXT PRIMARY KEY,
+        last_time TEXT
+    )
+    """)
+
+    cur.execute("""
+    INSERT INTO dice_meta (guild_id, last_time)
+    VALUES (?, CURRENT_TIMESTAMP)
+    ON CONFLICT(guild_id)
+    DO UPDATE SET last_time=CURRENT_TIMESTAMP
+    """, (guild_id,))
+
+    conn.commit()
+    conn.close()
+
+def get_last_dice_time(guild_id):
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+    SELECT last_time FROM dice_meta
+    WHERE guild_id=?
+    """, (guild_id,))
+
+    row = cur.fetchone()
+    conn.close()
+
+    return row[0] if row else None
+    
+# =========================
 # operators
 # =========================
 def add_operator(guild_id, user_id):
