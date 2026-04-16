@@ -161,7 +161,11 @@ async def history(interaction: discord.Interaction):
 
     view = HistoryView(data)
 
-    embed = create_history_embed(data[:5], title="📜 履歴（最新5件）")
+    embed = await create_history_embed(
+        data[:5],
+        interaction.guild,
+        title="📜 履歴（最新5件）"
+    )
 
     await interaction.response.send_message(
         embed=embed,
