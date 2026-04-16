@@ -69,13 +69,11 @@ class HistoryAllView(BaseTimeoutView):
             return 0
         return (len(self.history) - 1) // self.per_page
 
+    # 🔽 初回表示
     async def update_first(self, interaction: discord.Interaction):
         max_page = self.get_max_page()
 
-        # ページ表示更新
         self.page_label.label = f"{self.page+1}/{max_page+1}"
-
-        # ボタン制御
         self.prev.disabled = self.page == 0
         self.next.disabled = self.page == max_page
 
@@ -87,30 +85,29 @@ class HistoryAllView(BaseTimeoutView):
 
         await interaction.response.send_message(
             embed=embed,
+            view=self,
+            ephemeral=True
+        )
+
+    # 🔽 更新用
+    async def update(self, interaction: discord.Interaction):
+        max_page = self.get_max_page()
+
+        self.page_label.label = f"{self.page+1}/{max_page+1}"
+        self.prev.disabled = self.page == 0
+        self.next.disabled = self.page == max_page
+
+        embed = await create_history_embed(
+            self.get_page_data(),
+            interaction.guild,
+            title="📜 全履歴"
+        )
+
+        await interaction.response.edit_message(
+            embed=embed,
             view=self
         )
-        
-async def update(self, interaction: discord.Interaction):
-    max_page = self.get_max_page()
 
-    # ページ表示更新
-    self.page_label.label = f"{self.page+1}/{max_page+1}"
-
-    # ボタン制御
-    self.prev.disabled = self.page == 0
-    self.next.disabled = self.page == max_page
-
-    embed = await create_history_embed(
-        self.get_page_data(),
-        interaction.guild,
-        title="📜 全履歴"
-    )
-
-    await interaction.response.edit_message(
-        embed=embed,
-        view=self
-    )
-    
     # =========================
     # ボタン
     # =========================
