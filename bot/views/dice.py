@@ -3,7 +3,7 @@ import random
 import asyncio
 
 from utils import get_enabled_entries, get_member_safe, normalize_color, is_enabled, MAX_WEIGHT
-from db import save_entry, add_history
+from db import save_entry, add_history, update_last_dice_time
 from embed import create_role_embed
 
 class DiceView(discord.ui.View):
@@ -115,6 +115,7 @@ class DiceView(discord.ui.View):
                 save_entry(self.guild_id, uid, e)
 
             add_history(self.guild_id, winner_id, entry["role_name"])
+            update_last_dice_time(self.guild_id)
 
             embed = create_role_embed(
                 "🎉当選！",
