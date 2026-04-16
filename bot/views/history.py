@@ -37,20 +37,19 @@ async def create_history_embed(data, guild, title="履歴"):
 # =========================
 # 通常履歴（5件）
 # =========================
-class HistoryView(BaseTimeoutView):
+class HistoryView(discord.ui.View):
     def __init__(self, history):
         super().__init__(timeout=60)
         self.history_full = history
-        self.history = history[:5]
 
     @discord.ui.button(label="全履歴", style=discord.ButtonStyle.green)
     async def show_all(self, interaction: discord.Interaction, button: discord.ui.Button):
         view = HistoryAllView(self.history_full)
 
         embed = await create_history_embed(
-            data[:5],
+            view.get_page_data(),
             interaction.guild,
-            title="📜 履歴（最新5件）"
+            title="📜 全履歴"
         )
 
         await interaction.response.send_message(
