@@ -157,7 +157,8 @@ async def dice(interaction: discord.Interaction):
 # =========================
 @bot.tree.command(name="history", description="当選履歴")
 async def history(interaction: discord.Interaction):
-    data = get_history(str(interaction.guild.id))
+    guild_id = str(interaction.guild.id)
+    data = get_history(guild_id) 
 
     view = HistoryView(data)
 
