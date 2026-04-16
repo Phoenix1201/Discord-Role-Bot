@@ -97,7 +97,7 @@ class HistoryAllView(BaseTimeoutView):
             title="📜 全履歴"
         )
 
-        await interaction.response.edit_message(
+        await interaction.response.send_message(
             embed=embed,
             view=self,
             ephemeral=True
