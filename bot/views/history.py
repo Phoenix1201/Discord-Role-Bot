@@ -1,4 +1,5 @@
 import discord
+from utils import get_member_safe, get_display_name
 
 # =========================
 # 共通：タイムアウト処理
@@ -25,7 +26,8 @@ def create_history_embed(data, title="履歴"):
 
     text = ""
     for i, entry in enumerate(data, 1):
-        name = member.display_name if member else f"ID:{uid}"
+        member = await get_member_safe(guild, uid)
+        name = get_display_name(member, uid)
         text += f"{i}. {name} - {role_name}\n"
 
     embed.description = text
