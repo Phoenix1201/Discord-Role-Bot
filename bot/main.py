@@ -339,7 +339,7 @@ async def role(
 # =========================
 @bot.event
 async def on_ready():
-    os.makedirs("/data", exist_ok=True)
+    os.makedirs("data", exist_ok=True)
     init_db()
     await bot.tree.sync()
     print("起動完了")
